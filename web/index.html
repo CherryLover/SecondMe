@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondMe</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">SecondMe</h1>
+                <button id="new-topic-btn" class="btn-primary">+ 新话题</button>
+            </div>
+
+            <div class="topic-list" id="topic-list">
+                <!-- 话题列表动态生成 -->
+            </div>
+
+            <div class="sidebar-footer">
+                <button id="settings-btn" class="btn-icon" title="设置">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+                <button id="memory-btn" class="btn-icon" title="记忆管理">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="chat-header">
+                <div class="chat-title" id="chat-title">选择或创建一个话题</div>
+                <div class="model-selector">
+                    <select id="provider-select" class="select-input">
+                        <option value="">选择服务商</option>
+                    </select>
+                    <select id="model-select" class="select-input">
+                        <option value="">选择模型</option>
+                    </select>
+                </div>
+            </header>
+
+            <!-- 消息区域 -->
+            <div class="chat-messages" id="chat-messages">
+                <div class="empty-state" id="empty-state">
+                    <p>选择一个话题开始对话，或创建新话题</p>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <textarea
+                        id="message-input"
+                        class="chat-input"
+                        placeholder="输入消息..."
+                        rows="1"
+                        disabled
+                    ></textarea>
+                    <button id="send-btn" class="btn-send" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>设置</h2>
+                <button class="modal-close" onclick="closeModal('settings-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>服务商管理</h3>
+                    <div id="provider-list" class="provider-list">
+                        <!-- 服务商列表动态生成 -->
+                    </div>
+                    <button id="add-provider-btn" class="btn-secondary">+ 添加服务商</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>默认配置</h3>
+                    <div class="form-group">
+                        <label>默认对话服务商</label>
+                        <select id="default-chat-provider" class="select-input"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>默认对话模型</label>
+                        <input type="text" id="default-chat-model" class="text-input" placeholder="如: gpt-3.5-turbo">
+                    </div>
+                    <div class="form-group">
+                        <label>向量化服务商</label>
+                        <select id="embedding-provider" class="select-input"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>向量化模型</label>
+                        <input type="text" id="embedding-model" class="text-input" placeholder="如: text-embedding-3-small">
+                    </div>
+                    <div class="form-group">
+                        <label>记忆检索数量</label>
+                        <input type="number" id="memory-top-k" class="text-input" value="5" min="1" max="20">
+                    </div>
+                    <button id="save-settings-btn" class="btn-primary">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加服务商弹窗 -->
+    <div class="modal" id="provider-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="provider-modal-title">添加服务商</h2>
+                <button class="modal-close" onclick="closeModal('provider-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="provider-id">
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" id="provider-name" class="text-input" placeholder="如: OpenAI">
+                </div>
+                <div class="form-group">
+                    <label>Base URL</label>
+                    <input type="text" id="provider-base-url" class="text-input" placeholder="如: https://api.openai.com/v1">
+                </div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" id="provider-api-key" class="text-input" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="provider-enabled" checked>
+                        启用
+                    </label>
+                </div>
+                <button id="save-provider-btn" class="btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 记忆管理弹窗 -->
+    <div class="modal" id="memory-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>记忆管理</h2>
+                <button class="modal-close" onclick="closeModal('memory-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="memory-actions">
+                    <button id="add-memory-btn" class="btn-secondary">+ 添加记忆</button>
+                </div>
+                <div id="memory-list" class="memory-list">
+                    <!-- 记忆列表动态生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加记忆弹窗 -->
+    <div class="modal" id="add-memory-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>添加记忆</h2>
+                <button class="modal-close" onclick="closeModal('add-memory-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>记忆内容</label>
+                    <textarea id="memory-content" class="text-input" rows="4" placeholder="输入要记住的内容..."></textarea>
+                </div>
+                <button id="save-memory-btn" class="btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑记忆弹窗 -->
+    <div class="modal" id="edit-memory-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>编辑记忆</h2>
+                <button class="modal-close" onclick="closeModal('edit-memory-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-memory-id">
+                <div class="form-group">
+                    <label>记忆内容</label>
+                    <textarea id="edit-memory-content" class="text-input" rows="4" placeholder="输入要记住的内容..."></textarea>
+                </div>
+                <button id="update-memory-btn" class="btn-primary">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 记忆详情弹窗 -->
+    <div class="modal" id="memory-detail-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>记忆详情</h2>
+                <button class="modal-close" onclick="closeModal('memory-detail-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="memory-detail-content">
+                    <h3>记忆内容</h3>
+                    <p id="detail-memory-content"></p>
+                </div>
+                <div class="memory-detail-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">来源:</span>
+                        <span id="detail-memory-source"></span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">使用次数:</span>
+                        <span id="detail-memory-use-count"></span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">创建时间:</span>
+                        <span id="detail-memory-created-at"></span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">最后使用:</span>
+                        <span id="detail-memory-last-used"></span>
+                    </div>
+                </div>
+                <div class="memory-usage-section">
+                    <h3>使用记录</h3>
+                    <div id="memory-usage-list" class="usage-list">
+                        <!-- 使用记录动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
