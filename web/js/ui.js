@@ -127,6 +127,16 @@ function renderProviderList(providers) {
     `).join('');
 }
 
+// 记忆类型映射
+const MEMORY_TYPE_LABELS = {
+    'personal': '个人信息',
+    'preference': '偏好习惯',
+    'fact': '重要事实',
+    'plan': '计划决定',
+    'manual': '手动添加',
+    'chat': '对话'
+};
+
 // 渲染记忆列表
 function renderMemoryList(memories) {
     const container = document.getElementById('memory-list');
@@ -136,11 +146,15 @@ function renderMemoryList(memories) {
         return;
     }
 
-    container.innerHTML = memories.map(m => `
+    container.innerHTML = memories.map(m => {
+        const memoryType = m.memory_type || 'chat';
+        const typeLabel = MEMORY_TYPE_LABELS[memoryType] || memoryType;
+        return `
         <div class="memory-item">
             <div class="memory-content" onclick="viewMemoryDetail('${m.id}')" style="cursor: pointer;">${escapeHtml(m.content)}</div>
             <div class="memory-meta">
                 <div class="memory-stats">
+                    <span class="memory-type-tag memory-type-${memoryType}">${typeLabel}</span>
                     <span>来源: ${m.source === 'chat' ? '对话' : '手动'}</span>
                     <span>使用次数: ${m.use_count}</span>
                 </div>
@@ -151,7 +165,7 @@ function renderMemoryList(memories) {
                 </div>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // 渲染记忆详情

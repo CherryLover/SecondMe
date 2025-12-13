@@ -107,6 +107,7 @@ class MemoryResponse(BaseModel):
     use_count: int
     created_at: str
     last_used_at: Optional[str]
+    memory_type: Optional[str] = "chat"
 
 
 class MemoryUsageRecord(BaseModel):
@@ -135,6 +136,9 @@ class SettingsResponse(BaseModel):
     embedding_provider_id: Optional[str] = None
     embedding_model: Optional[str] = None
     memory_top_k: int = 5
+    memory_silent_minutes: int = 2
+    memory_extraction_enabled: bool = True
+    memory_context_messages: int = 6
 
 
 class SettingsUpdate(BaseModel):
@@ -143,6 +147,9 @@ class SettingsUpdate(BaseModel):
     embedding_provider_id: Optional[str] = None
     embedding_model: Optional[str] = None
     memory_top_k: Optional[int] = None
+    memory_silent_minutes: Optional[int] = None
+    memory_extraction_enabled: Optional[bool] = None
+    memory_context_messages: Optional[int] = None
 
 
 # ==================== Common ====================

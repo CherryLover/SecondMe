@@ -117,6 +117,27 @@
                         <label>记忆检索数量</label>
                         <input type="number" id="memory-top-k" class="text-input" value="5" min="1" max="20">
                     </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>记忆提炼</h3>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="memory-extraction-enabled" checked>
+                            启用自动记忆提炼
+                        </label>
+                        <small class="form-hint">对话静默一段时间后，AI 会自动提取有价值的记忆</small>
+                    </div>
+                    <div class="form-group">
+                        <label>静默时间（分钟）</label>
+                        <input type="number" id="memory-silent-minutes" class="text-input" value="2" min="1" max="60">
+                        <small class="form-hint">对话静默多久后触发记忆提炼</small>
+                    </div>
+                    <div class="form-group">
+                        <label>上下文消息数</label>
+                        <input type="number" id="memory-context-messages" class="text-input" value="6" min="2" max="20">
+                        <small class="form-hint">提炼时参考的历史消息数量</small>
+                    </div>
                     <button id="save-settings-btn" class="btn-primary">保存设置</button>
                 </div>
             </div>
@@ -165,6 +186,7 @@
             <div class="modal-body">
                 <div class="memory-actions">
                     <button id="add-memory-btn" class="btn-secondary">+ 添加记忆</button>
+                    <button id="delete-all-memories-btn" class="btn-secondary btn-danger">全部删除</button>
                 </div>
                 <div id="memory-list" class="memory-list">
                     <!-- 记忆列表动态生成 -->

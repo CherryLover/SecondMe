@@ -493,6 +493,53 @@ body {
     font-size: 0.75rem;
 }
 
+/* 记忆类型标签 */
+.memory-type-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.memory-type-personal {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+}
+
+.memory-type-preference {
+    background-color: #fef3c7;
+    color: #b45309;
+}
+
+.memory-type-fact {
+    background-color: #d1fae5;
+    color: #047857;
+}
+
+.memory-type-plan {
+    background-color: #ede9fe;
+    color: #6d28d9;
+}
+
+.memory-type-manual {
+    background-color: #fce7f3;
+    color: #be185d;
+}
+
+.memory-type-chat {
+    background-color: #f3f4f6;
+    color: #4b5563;
+}
+
+/* 表单提示 */
+.form-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
 /* 小按钮 */
 .btn-small {
     padding: 4px 10px !important;

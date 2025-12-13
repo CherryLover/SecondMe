@@ -1,5 +1,6 @@
 """记忆系统 - ChromaDB 向量存储"""
 import chromadb
+from chromadb.config import Settings
 from typing import Optional
 
 from config import CHROMA_PATH
@@ -14,7 +15,10 @@ def get_chroma_client() -> chromadb.PersistentClient:
     global _client
     if _client is None:
         CHROMA_PATH.mkdir(parents=True, exist_ok=True)
-        _client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+        _client = chromadb.PersistentClient(
+            path=str(CHROMA_PATH),
+            settings=Settings(anonymized_telemetry=False)
+        )
     return _client
 
 
@@ -95,3 +99,14 @@ def get_memory_count() -> int:
     """获取记忆总数"""
     collection = get_collection()
     return collection.count()
+
+
+def clear_all_vectors():
+    """清空所有向量"""
+    global _collection
+    client = get_chroma_client()
+    # 删除并重建 collection
+    client.delete_collection("memories")
+    _collection = None
+    # 重新创建
+    get_collection()

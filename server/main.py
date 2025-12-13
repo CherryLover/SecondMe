@@ -1,6 +1,7 @@
 """FastAPI 主入口"""
 import json
 import time
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -12,6 +13,7 @@ import memory
 import ai_client
 import config
 from logger import logger
+from extraction import extraction_task
 from models import (
     TopicCreate, TopicUpdate, TopicResponse, TopicsResponse,
     MessageCreate, MessageResponse, MessagesResponse, SendMessageResponse,
@@ -83,7 +85,18 @@ def init_default_provider():
 # 初始化默认 Provider
 init_default_provider()
 
-app = FastAPI(title="SecondMe API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时：开启后台任务
+    await extraction_task.start()
+    yield
+    # 关闭时：停止后台任务
+    await extraction_task.stop()
+
+
+app = FastAPI(title="SecondMe API", version="1.1.0", lifespan=lifespan)
 
 # CORS 配置
 app.add_middleware(
@@ -203,8 +216,8 @@ def send_message(topic_id: str, body: MessageCreate):
     # 保存用户消息
     user_message = database.create_message(topic_id, "user", body.content)
 
-    # 存储用户消息的记忆
-    _store_message_memory(user_message, settings)
+    # 更新话题活跃时间（用于记忆提炼的静默检测）
+    database.update_topic_active_time(topic_id)
 
     # 获取历史消息
     messages = database.get_messages(topic_id)
@@ -250,8 +263,8 @@ def send_message(topic_id: str, body: MessageCreate):
     # 保存 AI 回复
     assistant_message = database.create_message(topic_id, "assistant", ai_response)
 
-    # 存储 AI 回复的记忆
-    _store_message_memory(assistant_message, settings)
+    # 更新话题活跃时间
+    database.update_topic_active_time(topic_id)
 
     # 记录记忆使用
     for memory_id in memories_used:
@@ -298,8 +311,8 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
     # 保存用户消息
     user_message = database.create_message(topic_id, "user", body.content)
 
-    # 存储用户消息的记忆
-    _store_message_memory(user_message, settings)
+    # 更新话题活跃时间（用于记忆提炼的静默检测）
+    database.update_topic_active_time(topic_id)
 
     # 获取历史消息
     messages = database.get_messages(topic_id)
@@ -353,8 +366,8 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
         # 保存 AI 回复
         assistant_message = database.create_message(topic_id, "assistant", full_response)
 
-        # 存储 AI 回复的记忆
-        _store_message_memory(assistant_message, settings)
+        # 更新话题活跃时间
+        database.update_topic_active_time(topic_id)
 
         # 记录记忆使用
         for memory_id in memories_used:
@@ -496,6 +509,19 @@ def update_memory(memory_id: str, body: MemoryUpdate):
     return mem
 
 
+@app.delete("/api/memories/all")
+def delete_all_memories():
+    """删除所有记忆"""
+    # 删除数据库记录
+    count, _ = database.delete_all_memories()
+
+    # 清空整个向量集合（包括旧版本用消息ID存储的向量）
+    memory.clear_all_vectors()
+
+    logger.info(f"Deleted all memories: {count} records, cleared all vectors")
+    return {"success": True, "deleted_count": count}
+
+
 @app.delete("/api/memories/{memory_id}", response_model=SuccessResponse)
 def delete_memory(memory_id: str):
     """删除记忆"""
@@ -530,6 +556,12 @@ def update_settings(body: SettingsUpdate):
         database.set_setting("embedding_model", body.embedding_model)
     if body.memory_top_k is not None:
         database.set_setting("memory_top_k", str(body.memory_top_k))
+    if body.memory_silent_minutes is not None:
+        database.set_setting("memory_silent_minutes", str(body.memory_silent_minutes))
+    if body.memory_extraction_enabled is not None:
+        database.set_setting("memory_extraction_enabled", str(body.memory_extraction_enabled).lower())
+    if body.memory_context_messages is not None:
+        database.set_setting("memory_context_messages", str(body.memory_context_messages))
 
     return _get_settings()
 
@@ -544,35 +576,11 @@ def _get_settings() -> dict:
         "default_chat_model": all_settings.get("default_chat_model"),
         "embedding_provider_id": all_settings.get("embedding_provider_id"),
         "embedding_model": all_settings.get("embedding_model"),
-        "memory_top_k": int(all_settings.get("memory_top_k", "5"))
+        "memory_top_k": int(all_settings.get("memory_top_k", str(config.DEFAULT_MEMORY_TOP_K))),
+        "memory_silent_minutes": int(all_settings.get("memory_silent_minutes", str(config.DEFAULT_MEMORY_SILENT_MINUTES))),
+        "memory_extraction_enabled": all_settings.get("memory_extraction_enabled", str(config.DEFAULT_MEMORY_EXTRACTION_ENABLED).lower()) == "true",
+        "memory_context_messages": int(all_settings.get("memory_context_messages", str(config.DEFAULT_MEMORY_CONTEXT_MESSAGES)))
     }
-
-
-def _store_message_memory(message: dict, settings: dict):
-    """存储消息为记忆"""
-    if not settings.get("embedding_provider_id") or not settings.get("embedding_model"):
-        return
-
-    try:
-        # 创建记忆记录
-        mem = database.create_memory(
-            message["content"],
-            "chat",
-            message["topic_id"],
-            message["id"]
-        )
-
-        # 获取向量
-        embedding = ai_client.get_embedding(
-            settings["embedding_provider_id"],
-            settings["embedding_model"],
-            message["content"]
-        )
-
-        # 存储向量
-        memory.store_memory_vector(mem["id"], message["content"], embedding, "chat")
-    except Exception:
-        pass  # 记忆存储失败不影响主流程
 
 
 def _retrieve_memories(query: str, settings: dict) -> list[dict]:

@@ -196,6 +196,13 @@ class API {
         return response.json();
     }
 
+    static async deleteAllMemories() {
+        const response = await fetch(`${API_BASE}/memories/all`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    }
+
     // ==================== Settings ====================
 
     static async getSettings() {

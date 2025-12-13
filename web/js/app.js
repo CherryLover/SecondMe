@@ -59,6 +59,7 @@ function bindEvents() {
     document.getElementById('add-memory-btn').addEventListener('click', () => openModal('add-memory-modal'));
     document.getElementById('save-memory-btn').addEventListener('click', saveMemory);
     document.getElementById('update-memory-btn').addEventListener('click', updateMemory);
+    document.getElementById('delete-all-memories-btn').addEventListener('click', deleteAllMemories);
 
     // 默认服务商切换时加载模型
     document.getElementById('default-chat-provider').addEventListener('change', (e) => {
@@ -261,6 +262,11 @@ async function openSettings() {
     document.getElementById('embedding-model').value = settings.embedding_model || '';
     document.getElementById('memory-top-k').value = settings.memory_top_k || 5;
 
+    // 记忆提炼设置
+    document.getElementById('memory-extraction-enabled').checked = settings.memory_extraction_enabled !== false;
+    document.getElementById('memory-silent-minutes').value = settings.memory_silent_minutes || 2;
+    document.getElementById('memory-context-messages').value = settings.memory_context_messages || 6;
+
     openModal('settings-modal');
 }
 
@@ -364,7 +370,10 @@ async function saveSettings() {
         default_chat_model: document.getElementById('default-chat-model').value || null,
         embedding_provider_id: document.getElementById('embedding-provider').value || null,
         embedding_model: document.getElementById('embedding-model').value || null,
-        memory_top_k: parseInt(document.getElementById('memory-top-k').value) || 5
+        memory_top_k: parseInt(document.getElementById('memory-top-k').value) || 5,
+        memory_extraction_enabled: document.getElementById('memory-extraction-enabled').checked,
+        memory_silent_minutes: parseInt(document.getElementById('memory-silent-minutes').value) || 2,
+        memory_context_messages: parseInt(document.getElementById('memory-context-messages').value) || 6
     };
 
     try {
@@ -439,6 +448,26 @@ async function deleteMemory(memoryId) {
         showToast('记忆已删除');
     } catch (error) {
         console.error('Failed to delete memory:', error);
+        showToast('删除记忆失败');
+    }
+}
+
+// 删除所有记忆
+async function deleteAllMemories() {
+    if (!confirm('确定要删除所有记忆吗？此操作不可恢复！')) {
+        return;
+    }
+
+    try {
+        const result = await API.deleteAllMemories();
+
+        // 刷新记忆列表
+        const data = await API.getMemories(1, 50);
+        renderMemoryList(data.memories);
+
+        showToast(`已删除 ${result.deleted_count} 条记忆`);
+    } catch (error) {
+        console.error('Failed to delete all memories:', error);
         showToast('删除记忆失败');
     }
 }
