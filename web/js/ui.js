@@ -247,3 +247,38 @@ function showToast(message, type = 'info') {
     // 简单的 alert，可以后续改成更好看的 toast
     alert(message);
 }
+
+// ==================== Flowmo ====================
+
+// Flowmo 来源映射
+const FLOWMO_SOURCE_LABELS = {
+    'chat': '对话记录',
+    'direct': '直接添加'
+};
+
+// 渲染 Flowmo 列表
+function renderFlowmoList(flowmos) {
+    const container = document.getElementById('flowmo-list');
+
+    if (flowmos.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">暂无随想记录</p>';
+        return;
+    }
+
+    container.innerHTML = flowmos.map(f => {
+        const sourceLabel = FLOWMO_SOURCE_LABELS[f.source] || f.source;
+        return `
+        <div class="flowmo-item">
+            <div class="flowmo-content">${escapeHtml(f.content)}</div>
+            <div class="flowmo-meta">
+                <div class="flowmo-stats">
+                    <span class="flowmo-source-tag flowmo-source-${f.source}">${sourceLabel}</span>
+                    <span>${formatDateTime(f.created_at)}</span>
+                </div>
+                <div class="flowmo-actions-inline">
+                    <button class="btn-secondary btn-small btn-danger" onclick="deleteFlowmo('${f.id}')">删除</button>
+                </div>
+            </div>
+        </div>
+    `}).join('');
+}

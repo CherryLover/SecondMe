@@ -19,6 +19,7 @@ from models import (
     MessageCreate, MessageResponse, MessagesResponse, SendMessageResponse,
     ProviderCreate, ProviderUpdate, ProviderResponse, ProvidersResponse, ModelsResponse,
     MemoryCreate, MemoryUpdate, MemoryResponse, MemoryDetailResponse, MemoriesResponse,
+    FlowmoCreate, FlowmoResponse, FlowmosResponse, FlowmoTopicResponse,
     SettingsResponse, SettingsUpdate,
     SuccessResponse, ErrorResponse
 )
@@ -201,6 +202,9 @@ def send_message(topic_id: str, body: MessageCreate):
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
 
+    # 判断是否是 Flowmo 话题
+    is_flowmo_topic = bool(topic.get("is_flowmo", 0))
+
     # 获取配置
     settings = _get_settings()
     provider_id = body.provider_id or settings.get("default_chat_provider_id")
@@ -210,8 +214,9 @@ def send_message(topic_id: str, body: MessageCreate):
         logger.error("未配置服务商或模型")
         raise HTTPException(status_code=400, detail="No provider or model configured")
 
-    logger.info(f"[Chat] 话题={topic_id[:8]}... 模型={model}")
-    logger.info(f"[Chat] 用户消息: {body.content[:100]}{'...' if len(body.content) > 100 else ''}")
+    log_prefix = "[Flowmo]" if is_flowmo_topic else "[Chat]"
+    logger.info(f"{log_prefix} 话题={topic_id[:8]}... 模型={model}")
+    logger.info(f"{log_prefix} 用户消息: {body.content[:100]}{'...' if len(body.content) > 100 else ''}")
 
     # 保存用户消息
     user_message = database.create_message(topic_id, "user", body.content)
@@ -219,24 +224,48 @@ def send_message(topic_id: str, body: MessageCreate):
     # 更新话题活跃时间（用于记忆提炼的静默检测）
     database.update_topic_active_time(topic_id)
 
-    # 获取历史消息
-    messages = database.get_messages(topic_id)
-    chat_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
-    logger.debug(f"[Chat] 历史消息数: {len(chat_messages)}")
+    # Flowmo 话题特殊处理
+    if is_flowmo_topic:
+        # 处理 Flowmo 记录
+        _handle_flowmo_record(topic_id, user_message, settings)
 
-    # 检索相关记忆
-    memories_used = []
-    system_prompt = None
-    if settings.get("embedding_provider_id") and settings.get("embedding_model"):
-        try:
-            retrieved_memories = _retrieve_memories(body.content, settings)
-            if retrieved_memories:
-                memories_used = [m["id"] for m in retrieved_memories]
-                logger.info(f"[Memory] 检索到 {len(retrieved_memories)} 条相关记忆")
-                for i, m in enumerate(retrieved_memories):
-                    logger.debug(f"[Memory] #{i+1}: {m['content'][:50]}...")
-                memory_text = "\n".join([f"- {m['content']}" for m in retrieved_memories])
-                system_prompt = f"""你是一个有记忆能力的 AI 助手。
+        # 获取 Flowmo 上下文（不受 MAX_CONTEXT_MESSAGES 限制）
+        chat_messages = _get_flowmo_context_messages(topic_id, user_message)
+        logger.debug(f"{log_prefix} 上下文消息数: {len(chat_messages)}")
+
+        # Flowmo 使用专门的 System Prompt
+        system_prompt = FLOWMO_SYSTEM_PROMPT
+        memories_used = []
+    else:
+        # 普通话题：获取历史消息
+        messages = database.get_messages(topic_id)
+        logger.info(f"{log_prefix} 原始消息数: {len(messages)}, 限制: {config.MAX_CONTEXT_MESSAGES}")
+        # 截取最近 N 条消息
+        if len(messages) > config.MAX_CONTEXT_MESSAGES:
+            messages = messages[-config.MAX_CONTEXT_MESSAGES:]
+            logger.info(f"{log_prefix} 消息已截取，保留最近 {config.MAX_CONTEXT_MESSAGES} 条")
+        chat_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
+        logger.info(f"{log_prefix} 发送给 AI 的消息数: {len(chat_messages)}")
+        # 打印实际发送的第一条和最后一条消息内容（用于验证截取是否生效）
+        if chat_messages:
+            first_msg = chat_messages[0]["content"][:80].replace("\n", " ")
+            last_msg = chat_messages[-1]["content"][:80].replace("\n", " ")
+            logger.info(f"{log_prefix} 第一条: {first_msg}...")
+            logger.info(f"{log_prefix} 最后一条: {last_msg}...")
+
+        # 检索相关记忆
+        memories_used = []
+        system_prompt = None
+        if settings.get("embedding_provider_id") and settings.get("embedding_model"):
+            try:
+                retrieved_memories = _retrieve_memories(body.content, settings)
+                if retrieved_memories:
+                    memories_used = [m["id"] for m in retrieved_memories]
+                    logger.info(f"[Memory] 检索到 {len(retrieved_memories)} 条相关记忆")
+                    for i, m in enumerate(retrieved_memories):
+                        logger.debug(f"[Memory] #{i+1}: {m['content'][:50]}...")
+                    memory_text = "\n".join([f"- {m['content']}" for m in retrieved_memories])
+                    system_prompt = f"""你是一个有记忆能力的 AI 助手。
 
 以下是与当前问题相关的历史记忆：
 ---
@@ -244,10 +273,10 @@ def send_message(topic_id: str, body: MessageCreate):
 ---
 
 请结合这些记忆和当前对话来回答用户的问题。如果记忆中有相关信息，可以主动提及。"""
-            else:
-                logger.info("[Memory] 未检索到相关记忆")
-        except Exception as e:
-            logger.warning(f"[Memory] 记忆检索失败: {str(e)}")
+                else:
+                    logger.info("[Memory] 未检索到相关记忆")
+            except Exception as e:
+                logger.warning(f"[Memory] 记忆检索失败: {str(e)}")
 
     # 调用 AI
     try:
@@ -270,9 +299,9 @@ def send_message(topic_id: str, body: MessageCreate):
     for memory_id in memories_used:
         database.record_memory_usage(memory_id, topic_id, assistant_message["id"])
 
-    # 判断是否需要生成标题
+    # 判断是否需要生成标题（Flowmo 话题不生成标题）
     topic_title_updated = False
-    if database.get_message_count(topic_id) == 2:  # 第一轮对话
+    if not is_flowmo_topic and database.get_message_count(topic_id) == 2:  # 第一轮对话
         try:
             title = ai_client.generate_title(provider_id, model, body.content)
             database.update_topic(topic_id, title)
@@ -296,6 +325,9 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
 
+    # 判断是否是 Flowmo 话题
+    is_flowmo_topic = bool(topic.get("is_flowmo", 0))
+
     # 获取配置
     settings = _get_settings()
     provider_id = body.provider_id or settings.get("default_chat_provider_id")
@@ -305,8 +337,9 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
         logger.error("未配置服务商或模型")
         raise HTTPException(status_code=400, detail="No provider or model configured")
 
-    logger.info(f"[Stream] 话题={topic_id[:8]}... 模型={model}")
-    logger.info(f"[Stream] 用户消息: {body.content[:100]}{'...' if len(body.content) > 100 else ''}")
+    log_prefix = "[Flowmo-Stream]" if is_flowmo_topic else "[Stream]"
+    logger.info(f"{log_prefix} 话题={topic_id[:8]}... 模型={model}")
+    logger.info(f"{log_prefix} 用户消息: {body.content[:100]}{'...' if len(body.content) > 100 else ''}")
 
     # 保存用户消息
     user_message = database.create_message(topic_id, "user", body.content)
@@ -314,22 +347,46 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
     # 更新话题活跃时间（用于记忆提炼的静默检测）
     database.update_topic_active_time(topic_id)
 
-    # 获取历史消息
-    messages = database.get_messages(topic_id)
-    chat_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
-    logger.debug(f"[Stream] 历史消息数: {len(chat_messages)}")
+    # Flowmo 话题特殊处理
+    if is_flowmo_topic:
+        # 处理 Flowmo 记录
+        _handle_flowmo_record(topic_id, user_message, settings)
 
-    # 检索相关记忆
-    memories_used = []
-    system_prompt = None
-    if settings.get("embedding_provider_id") and settings.get("embedding_model"):
-        try:
-            retrieved_memories = _retrieve_memories(body.content, settings)
-            if retrieved_memories:
-                memories_used = [m["id"] for m in retrieved_memories]
-                logger.info(f"[Memory] 检索到 {len(retrieved_memories)} 条相关记忆")
-                memory_text = "\n".join([f"- {m['content']}" for m in retrieved_memories])
-                system_prompt = f"""你是一个有记忆能力的 AI 助手。
+        # 获取 Flowmo 上下文（不受 MAX_CONTEXT_MESSAGES 限制）
+        chat_messages = _get_flowmo_context_messages(topic_id, user_message)
+        logger.debug(f"{log_prefix} 上下文消息数: {len(chat_messages)}")
+
+        # Flowmo 使用专门的 System Prompt
+        system_prompt = FLOWMO_SYSTEM_PROMPT
+        memories_used = []
+    else:
+        # 普通话题：获取历史消息
+        messages = database.get_messages(topic_id)
+        logger.info(f"{log_prefix} 原始消息数: {len(messages)}, 限制: {config.MAX_CONTEXT_MESSAGES}")
+        # 截取最近 N 条消息
+        if len(messages) > config.MAX_CONTEXT_MESSAGES:
+            messages = messages[-config.MAX_CONTEXT_MESSAGES:]
+            logger.info(f"{log_prefix} 消息已截取，保留最近 {config.MAX_CONTEXT_MESSAGES} 条")
+        chat_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
+        logger.info(f"{log_prefix} 发送给 AI 的消息数: {len(chat_messages)}")
+        # 打印实际发送的第一条和最后一条消息内容（用于验证截取是否生效）
+        if chat_messages:
+            first_msg = chat_messages[0]["content"][:80].replace("\n", " ")
+            last_msg = chat_messages[-1]["content"][:80].replace("\n", " ")
+            logger.info(f"{log_prefix} 第一条: {first_msg}...")
+            logger.info(f"{log_prefix} 最后一条: {last_msg}...")
+
+        # 检索相关记忆
+        memories_used = []
+        system_prompt = None
+        if settings.get("embedding_provider_id") and settings.get("embedding_model"):
+            try:
+                retrieved_memories = _retrieve_memories(body.content, settings)
+                if retrieved_memories:
+                    memories_used = [m["id"] for m in retrieved_memories]
+                    logger.info(f"[Memory] 检索到 {len(retrieved_memories)} 条相关记忆")
+                    memory_text = "\n".join([f"- {m['content']}" for m in retrieved_memories])
+                    system_prompt = f"""你是一个有记忆能力的 AI 助手。
 
 以下是与当前问题相关的历史记忆：
 ---
@@ -337,10 +394,10 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
 ---
 
 请结合这些记忆和当前对话来回答用户的问题。如果记忆中有相关信息，可以主动提及。"""
-            else:
-                logger.info("[Memory] 未检索到相关记忆")
-        except Exception as e:
-            logger.warning(f"[Memory] 记忆检索失败: {str(e)}")
+                else:
+                    logger.info("[Memory] 未检索到相关记忆")
+            except Exception as e:
+                logger.warning(f"[Memory] 记忆检索失败: {str(e)}")
 
     async def generate():
         full_response = ""
@@ -355,13 +412,13 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
                 full_response += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
         except Exception as e:
-            logger.error(f"[Stream] AI 调用失败: {str(e)}")
+            logger.error(f"{log_prefix} AI 调用失败: {str(e)}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
             return
 
         duration = (time.time() - start_time) * 1000
-        logger.info(f"[Stream] 响应耗时: {duration:.0f}ms, 长度: {len(full_response)} 字符")
-        logger.info(f"[Stream] 回复: {full_response[:100]}{'...' if len(full_response) > 100 else ''}")
+        logger.info(f"{log_prefix} 响应耗时: {duration:.0f}ms, 长度: {len(full_response)} 字符")
+        logger.info(f"{log_prefix} 回复: {full_response[:100]}{'...' if len(full_response) > 100 else ''}")
 
         # 保存 AI 回复
         assistant_message = database.create_message(topic_id, "assistant", full_response)
@@ -373,10 +430,10 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
         for memory_id in memories_used:
             database.record_memory_usage(memory_id, topic_id, assistant_message["id"])
 
-        # 判断是否需要生成标题
+        # 判断是否需要生成标题（Flowmo 话题不生成标题）
         topic_title_updated = False
         new_title = None
-        if database.get_message_count(topic_id) == 2:
+        if not is_flowmo_topic and database.get_message_count(topic_id) == 2:
             try:
                 new_title = ai_client.generate_title(provider_id, model, body.content)
                 database.update_topic(topic_id, new_title)
@@ -566,6 +623,85 @@ def update_settings(body: SettingsUpdate):
     return _get_settings()
 
 
+# ==================== Flowmo ====================
+
+@app.get("/api/flowmo/topic", response_model=FlowmoTopicResponse)
+def get_flowmo_topic():
+    """获取或创建 Flowmo 话题"""
+    topic = database.get_or_create_flowmo_topic()
+    return {
+        "id": topic["id"],
+        "title": topic["title"],
+        "is_flowmo": bool(topic.get("is_flowmo", 1)),
+        "created_at": topic["created_at"],
+        "updated_at": topic["updated_at"]
+    }
+
+
+@app.get("/api/flowmos", response_model=FlowmosResponse)
+def get_flowmos(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100)
+):
+    """获取 Flowmo 列表"""
+    flowmos, total = database.get_flowmos(page, page_size)
+    return {
+        "flowmos": flowmos,
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+@app.post("/api/flowmos", response_model=FlowmoResponse)
+def create_flowmo(body: FlowmoCreate):
+    """直接添加 Flowmo（不经过对话）"""
+    # 创建 Flowmo 记录
+    flowmo = database.create_flowmo(body.content, "direct")
+
+    # 向量化存储
+    settings = _get_settings()
+    if settings.get("embedding_provider_id") and settings.get("embedding_model"):
+        try:
+            embedding = ai_client.get_embedding(
+                settings["embedding_provider_id"],
+                settings["embedding_model"],
+                body.content
+            )
+            memory.store_flowmo_vector(flowmo["id"], body.content, embedding)
+            logger.info(f"[Flowmo] 向量化成功: {flowmo['id'][:8]}...")
+        except Exception as e:
+            logger.warning(f"[Flowmo] 向量化失败: {str(e)}")
+
+    return flowmo
+
+
+@app.delete("/api/flowmos/all")
+def delete_all_flowmos():
+    """删除所有 Flowmo"""
+    count, flowmo_ids = database.delete_all_flowmos()
+
+    # 删除向量
+    for flowmo_id in flowmo_ids:
+        memory.delete_flowmo_vector(flowmo_id)
+
+    logger.info(f"[Flowmo] 删除所有 Flowmo: {count} 条")
+    return {"success": True, "deleted_count": count}
+
+
+@app.delete("/api/flowmos/{flowmo_id}", response_model=SuccessResponse)
+def delete_flowmo(flowmo_id: str):
+    """删除 Flowmo"""
+    # 删除向量
+    memory.delete_flowmo_vector(flowmo_id)
+
+    # 删除数据库记录
+    success = database.delete_flowmo(flowmo_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Flowmo not found")
+    return {"success": True}
+
+
 # ==================== Helper Functions ====================
 
 def _get_settings() -> dict:
@@ -584,7 +720,7 @@ def _get_settings() -> dict:
 
 
 def _retrieve_memories(query: str, settings: dict) -> list[dict]:
-    """检索相关记忆"""
+    """检索相关记忆（包括记忆和 Flowmo）"""
     if not settings.get("embedding_provider_id") or not settings.get("embedding_model"):
         return []
 
@@ -595,9 +731,105 @@ def _retrieve_memories(query: str, settings: dict) -> list[dict]:
         query
     )
 
-    # 搜索相关记忆
+    # 联合搜索记忆和 Flowmo
     top_k = settings.get("memory_top_k", 5)
-    return memory.search_memories(embedding, top_k)
+    return memory.search_memories_and_flowmos(embedding, top_k)
+
+
+def _is_new_flowmo(topic_id: str, last_message_time: str) -> bool:
+    """判断是否是新的 Flowmo 记录（距离上一条消息 >= FLOWMO_INTERVAL_MINUTES 分钟）"""
+    if not last_message_time:
+        return True
+
+    from datetime import datetime, timedelta
+    last_time = datetime.fromisoformat(last_message_time)
+    now = datetime.now()
+    interval = timedelta(minutes=config.FLOWMO_INTERVAL_MINUTES)
+
+    return (now - last_time) >= interval
+
+
+def _get_flowmo_context_messages(topic_id: str, current_message: dict) -> list[dict]:
+    """获取 Flowmo 话题的上下文消息
+
+    规则：
+    - 如果是新的 Flowmo（距离上条消息 >= 5分钟），只返回当前消息
+    - 否则返回从上一条 Flowmo 开始到现在的所有消息
+    """
+    # 获取上一条消息的时间（不包括当前消息）
+    messages = database.get_messages(topic_id)
+    if len(messages) <= 1:
+        # 只有当前消息
+        return [{"role": current_message["role"], "content": current_message["content"]}]
+
+    # 排除当前消息后的最后一条消息时间
+    previous_messages = messages[:-1]
+    last_message_time = previous_messages[-1]["created_at"] if previous_messages else None
+
+    if _is_new_flowmo(topic_id, last_message_time):
+        # 新的 Flowmo，只返回当前消息
+        return [{"role": current_message["role"], "content": current_message["content"]}]
+
+    # 继续聊天，找到最近一条 Flowmo 的时间
+    latest_flowmo_time = database.get_latest_flowmo_time(topic_id)
+
+    if not latest_flowmo_time:
+        # 没有 Flowmo 记录，返回所有消息
+        return [{"role": m["role"], "content": m["content"]} for m in messages]
+
+    # 返回从最近 Flowmo 时间之后的所有消息（包括那条 Flowmo 对应的消息）
+    context_messages = []
+    for m in messages:
+        if m["created_at"] >= latest_flowmo_time:
+            context_messages.append({"role": m["role"], "content": m["content"]})
+
+    return context_messages if context_messages else [{"role": current_message["role"], "content": current_message["content"]}]
+
+
+def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict) -> bool:
+    """处理 Flowmo 记录
+
+    返回：是否创建了新的 Flowmo 记录
+    """
+    # 获取上一条消息的时间
+    messages = database.get_messages(topic_id)
+    if len(messages) <= 1:
+        last_message_time = None
+    else:
+        last_message_time = messages[-2]["created_at"]  # 倒数第二条（当前消息是最后一条）
+
+    if _is_new_flowmo(topic_id, last_message_time):
+        # 创建 Flowmo 记录
+        flowmo = database.create_flowmo(
+            content=user_message["content"],
+            source="chat",
+            topic_id=topic_id,
+            message_id=user_message["id"]
+        )
+        logger.info(f"[Flowmo] 创建记录: {flowmo['id'][:8]}...")
+
+        # 向量化
+        if settings.get("embedding_provider_id") and settings.get("embedding_model"):
+            try:
+                embedding = ai_client.get_embedding(
+                    settings["embedding_provider_id"],
+                    settings["embedding_model"],
+                    user_message["content"]
+                )
+                memory.store_flowmo_vector(flowmo["id"], user_message["content"], embedding)
+                logger.info(f"[Flowmo] 向量化成功")
+            except Exception as e:
+                logger.warning(f"[Flowmo] 向量化失败: {str(e)}")
+
+        return True
+
+    return False
+
+
+# Flowmo 话题的 System Prompt
+FLOWMO_SYSTEM_PROMPT = """你是一个善于倾听的伙伴。用户在记录自己的想法、情绪或日常。
+请以温和、共情的方式回应，可以简短也可以展开聊聊。
+不要急于给建议，先理解和陪伴。"""
 
 
 if __name__ == "__main__":

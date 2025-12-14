@@ -61,6 +61,13 @@ function bindEvents() {
     document.getElementById('update-memory-btn').addEventListener('click', updateMemory);
     document.getElementById('delete-all-memories-btn').addEventListener('click', deleteAllMemories);
 
+    // Flowmo
+    document.getElementById('flowmo-topic-btn').addEventListener('click', openFlowmoTopic);
+    document.getElementById('flowmo-list-btn').addEventListener('click', openFlowmoList);
+    document.getElementById('add-flowmo-btn').addEventListener('click', () => openModal('add-flowmo-modal'));
+    document.getElementById('save-flowmo-btn').addEventListener('click', saveFlowmo);
+    document.getElementById('delete-all-flowmos-btn').addEventListener('click', deleteAllFlowmos);
+
     // 默认服务商切换时加载模型
     document.getElementById('default-chat-provider').addEventListener('change', (e) => {
         // 可以在这里加载模型列表供选择
@@ -513,5 +520,103 @@ async function viewMemoryDetail(memoryId) {
     } catch (error) {
         console.error('Failed to load memory detail:', error);
         showToast('加载记忆详情失败');
+    }
+}
+
+// ==================== Flowmo ====================
+
+// 打开 Flowmo 话题
+async function openFlowmoTopic() {
+    try {
+        const topic = await API.getFlowmoTopic();
+
+        // 将 Flowmo 话题添加到话题列表（如果不存在）
+        const existingIndex = topics.findIndex(t => t.id === topic.id);
+        if (existingIndex === -1) {
+            topics.unshift(topic);
+        }
+
+        // 选择该话题
+        await selectTopic(topic.id);
+    } catch (error) {
+        console.error('Failed to open flowmo topic:', error);
+        showToast('打开 Flowmo 话题失败');
+    }
+}
+
+// 打开 Flowmo 列表弹窗
+async function openFlowmoList() {
+    try {
+        const data = await API.getFlowmos(1, 50);
+        renderFlowmoList(data.flowmos);
+        openModal('flowmo-modal');
+    } catch (error) {
+        console.error('Failed to load flowmos:', error);
+        showToast('加载随想列表失败');
+    }
+}
+
+// 保存 Flowmo（直接添加）
+async function saveFlowmo() {
+    const content = document.getElementById('flowmo-content').value.trim();
+
+    if (!content) {
+        showToast('请输入随想内容');
+        return;
+    }
+
+    try {
+        await API.createFlowmo(content);
+        document.getElementById('flowmo-content').value = '';
+        closeModal('add-flowmo-modal');
+
+        // 刷新 Flowmo 列表
+        const data = await API.getFlowmos(1, 50);
+        renderFlowmoList(data.flowmos);
+
+        showToast('随想已添加');
+    } catch (error) {
+        console.error('Failed to save flowmo:', error);
+        showToast('添加随想失败');
+    }
+}
+
+// 删除 Flowmo
+async function deleteFlowmo(flowmoId) {
+    if (!confirm('确定要删除这条随想吗？')) {
+        return;
+    }
+
+    try {
+        await API.deleteFlowmo(flowmoId);
+
+        // 刷新 Flowmo 列表
+        const data = await API.getFlowmos(1, 50);
+        renderFlowmoList(data.flowmos);
+
+        showToast('随想已删除');
+    } catch (error) {
+        console.error('Failed to delete flowmo:', error);
+        showToast('删除随想失败');
+    }
+}
+
+// 删除所有 Flowmo
+async function deleteAllFlowmos() {
+    if (!confirm('确定要删除所有随想吗？此操作不可恢复！')) {
+        return;
+    }
+
+    try {
+        const result = await API.deleteAllFlowmos();
+
+        // 刷新 Flowmo 列表
+        const data = await API.getFlowmos(1, 50);
+        renderFlowmoList(data.flowmos);
+
+        showToast(`已删除 ${result.deleted_count} 条随想`);
+    } catch (error) {
+        console.error('Failed to delete all flowmos:', error);
+        showToast('删除随想失败');
     }
 }

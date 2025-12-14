@@ -203,6 +203,41 @@ class API {
         return response.json();
     }
 
+    // ==================== Flowmo ====================
+
+    static async getFlowmoTopic() {
+        const response = await fetch(`${API_BASE}/flowmo/topic`);
+        return response.json();
+    }
+
+    static async getFlowmos(page = 1, pageSize = 20) {
+        const response = await fetch(`${API_BASE}/flowmos?page=${page}&page_size=${pageSize}`);
+        return response.json();
+    }
+
+    static async createFlowmo(content) {
+        const response = await fetch(`${API_BASE}/flowmos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+        });
+        return response.json();
+    }
+
+    static async deleteFlowmo(flowmoId) {
+        const response = await fetch(`${API_BASE}/flowmos/${flowmoId}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    }
+
+    static async deleteAllFlowmos() {
+        const response = await fetch(`${API_BASE}/flowmos/all`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    }
+
     // ==================== Settings ====================
 
     static async getSettings() {

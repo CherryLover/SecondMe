@@ -128,6 +128,36 @@ class MemoriesResponse(BaseModel):
     page_size: int
 
 
+# ==================== Flowmo ====================
+
+class FlowmoCreate(BaseModel):
+    content: str
+
+
+class FlowmoResponse(BaseModel):
+    id: str
+    content: str
+    source: str
+    topic_id: Optional[str]
+    message_id: Optional[str]
+    created_at: str
+
+
+class FlowmosResponse(BaseModel):
+    flowmos: list[FlowmoResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class FlowmoTopicResponse(BaseModel):
+    id: str
+    title: str
+    is_flowmo: bool
+    created_at: str
+    updated_at: str
+
+
 # ==================== Settings ====================
 
 class SettingsResponse(BaseModel):

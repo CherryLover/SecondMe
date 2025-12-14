@@ -626,6 +626,100 @@ body {
     margin-left: 12px;
 }
 
+/* ==================== Flowmo 样式 ==================== */
+
+/* Flowmo 按钮 */
+.btn-flowmo {
+    padding: 8px 12px;
+    background-color: #f59e0b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-flowmo:hover {
+    background-color: #d97706;
+}
+
+/* 头部按钮容器 */
+.header-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.header-buttons .btn-primary {
+    width: auto;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+/* Flowmo 列表 */
+.flowmo-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.flowmo-item {
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background-color: #fffbeb;
+}
+
+.flowmo-content {
+    margin-bottom: 8px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.flowmo-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.flowmo-stats {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.flowmo-actions-inline {
+    display: flex;
+    gap: 8px;
+}
+
+.flowmo-actions-inline button {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+}
+
+/* Flowmo 来源标签 */
+.flowmo-source-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.flowmo-source-chat {
+    background-color: #fef3c7;
+    color: #b45309;
+}
+
+.flowmo-source-direct {
+    background-color: #fed7aa;
+    color: #c2410c;
+}
+
 /* 加载动画 */
 .typing-indicator {
     display: flex;

@@ -24,6 +24,8 @@ def _migrate_database(cursor):
         cursor.execute("ALTER TABLE topics ADD COLUMN memory_processed_at TIMESTAMP")
     if "last_processed_message_id" not in topic_columns:
         cursor.execute("ALTER TABLE topics ADD COLUMN last_processed_message_id TEXT")
+    if "is_flowmo" not in topic_columns:
+        cursor.execute("ALTER TABLE topics ADD COLUMN is_flowmo INTEGER DEFAULT 0")
 
     # memories 表迁移
     memory_columns = _get_table_columns(cursor, "memories")
@@ -67,7 +69,8 @@ def init_database():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active_at TIMESTAMP,
                 memory_processed_at TIMESTAMP,
-                last_processed_message_id TEXT
+                last_processed_message_id TEXT,
+                is_flowmo INTEGER DEFAULT 0
             )
         """)
 
@@ -134,6 +137,20 @@ def init_database():
             )
         """)
 
+        # 创建 Flowmo 表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS flowmos (
+                id TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                source TEXT NOT NULL CHECK(source IN ('chat', 'direct')),
+                topic_id TEXT,
+                message_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE SET NULL,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
+            )
+        """)
+
         # 数据库迁移：为已有表添加新字段
         _migrate_database(cursor)
 
@@ -146,6 +163,7 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memories_last_used ON memories(last_used_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_usage_memory_id ON memory_usage(memory_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_usage_topic_id ON memory_usage(topic_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flowmos_created_at ON flowmos(created_at DESC)")
 
 
 # ==================== Topics ====================
@@ -617,3 +635,126 @@ def update_memory_content(memory_id: str, content: str) -> Optional[dict]:
             (content, memory_id)
         )
     return get_memory(memory_id)
+
+
+# ==================== Flowmo ====================
+
+def get_or_create_flowmo_topic() -> dict:
+    """获取或创建 Flowmo 话题"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM topics WHERE is_flowmo = 1"
+        ).fetchone()
+
+        if row:
+            return dict(row)
+
+        # 创建新的 Flowmo 话题
+        topic_id = str(uuid4())
+        now = datetime.now().isoformat()
+        conn.execute(
+            "INSERT INTO topics (id, title, created_at, updated_at, is_flowmo) VALUES (?, ?, ?, ?, 1)",
+            (topic_id, "Flowmo", now, now)
+        )
+
+    return {
+        "id": topic_id,
+        "title": "Flowmo",
+        "created_at": now,
+        "updated_at": now,
+        "is_flowmo": 1
+    }
+
+
+def get_last_message_time(topic_id: str) -> Optional[str]:
+    """获取话题最后一条消息的时间"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT created_at FROM messages WHERE topic_id = ? ORDER BY created_at DESC LIMIT 1",
+            (topic_id,)
+        ).fetchone()
+    return row["created_at"] if row else None
+
+
+def get_messages_since(topic_id: str, since_time: str) -> list[dict]:
+    """获取指定时间之后的消息"""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM messages WHERE topic_id = ? AND created_at > ? ORDER BY created_at ASC",
+            (topic_id, since_time)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_flowmo(content: str, source: str, topic_id: Optional[str] = None, message_id: Optional[str] = None) -> dict:
+    """创建 Flowmo 记录"""
+    flowmo_id = str(uuid4())
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO flowmos (id, content, source, topic_id, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (flowmo_id, content, source, topic_id, message_id, now)
+        )
+
+    return {
+        "id": flowmo_id,
+        "content": content,
+        "source": source,
+        "topic_id": topic_id,
+        "message_id": message_id,
+        "created_at": now
+    }
+
+
+def get_flowmos(page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    """获取 Flowmo 列表（分页）"""
+    offset = (page - 1) * page_size
+
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM flowmos ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (page_size, offset)
+        ).fetchall()
+        total = conn.execute("SELECT COUNT(*) as count FROM flowmos").fetchone()["count"]
+
+    return [dict(row) for row in rows], total
+
+
+def get_flowmo(flowmo_id: str) -> Optional[dict]:
+    """获取单个 Flowmo"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM flowmos WHERE id = ?", (flowmo_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_flowmo(flowmo_id: str) -> bool:
+    """删除 Flowmo"""
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM flowmos WHERE id = ?", (flowmo_id,))
+    return cursor.rowcount > 0
+
+
+def delete_all_flowmos() -> tuple[int, list[str]]:
+    """删除所有 Flowmo，返回删除的数量和ID列表"""
+    with get_db() as conn:
+        rows = conn.execute("SELECT id FROM flowmos").fetchall()
+        flowmo_ids = [row["id"] for row in rows]
+        cursor = conn.execute("DELETE FROM flowmos")
+        count = cursor.rowcount
+
+    return count, flowmo_ids
+
+
+def get_latest_flowmo_time(topic_id: str) -> Optional[str]:
+    """获取话题中最新 Flowmo 记录的时间（用于判断是否是新的 Flowmo）"""
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT f.created_at FROM flowmos f
+               WHERE f.topic_id = ?
+               ORDER BY f.created_at DESC LIMIT 1""",
+            (topic_id,)
+        ).fetchone()
+    return row["created_at"] if row else None

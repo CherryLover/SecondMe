@@ -8,6 +8,7 @@ from config import CHROMA_PATH
 # 全局 ChromaDB 客户端
 _client: Optional[chromadb.PersistentClient] = None
 _collection: Optional[chromadb.Collection] = None
+_flowmo_collection: Optional[chromadb.Collection] = None
 
 
 def get_chroma_client() -> chromadb.PersistentClient:
@@ -110,3 +111,72 @@ def clear_all_vectors():
     _collection = None
     # 重新创建
     get_collection()
+
+
+# ==================== Flowmo 向量存储 ====================
+
+def get_flowmo_collection() -> chromadb.Collection:
+    """获取 Flowmo collection"""
+    global _flowmo_collection
+    if _flowmo_collection is None:
+        client = get_chroma_client()
+        _flowmo_collection = client.get_or_create_collection(
+            name="flowmos",
+            metadata={"description": "Flowmo records - personal thoughts and reflections"}
+        )
+    return _flowmo_collection
+
+
+def store_flowmo_vector(flowmo_id: str, content: str, embedding: list[float]):
+    """存储 Flowmo 向量"""
+    collection = get_flowmo_collection()
+    collection.add(
+        ids=[flowmo_id],
+        documents=[content],
+        embeddings=[embedding],
+        metadatas=[{"source": "flowmo"}]
+    )
+
+
+def delete_flowmo_vector(flowmo_id: str):
+    """删除 Flowmo 向量"""
+    collection = get_flowmo_collection()
+    try:
+        collection.delete(ids=[flowmo_id])
+    except Exception:
+        pass  # 向量可能不存在
+
+
+def search_flowmos(query_embedding: list[float], top_k: int = 5) -> list[dict]:
+    """搜索相关 Flowmo"""
+    collection = get_flowmo_collection()
+
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k
+    )
+
+    flowmos = []
+    if results and results["ids"] and results["ids"][0]:
+        for i, flowmo_id in enumerate(results["ids"][0]):
+            flowmos.append({
+                "id": flowmo_id,
+                "content": results["documents"][0][i] if results["documents"] else "",
+                "source": "flowmo",
+                "distance": results["distances"][0][i] if results["distances"] else 0
+            })
+
+    return flowmos
+
+
+def search_memories_and_flowmos(query_embedding: list[float], top_k: int = 5) -> list[dict]:
+    """联合搜索记忆和 Flowmo，按相似度排序返回 top_k 条"""
+    # 从记忆和 Flowmo 各取更多结果
+    memories = search_memories(query_embedding, top_k * 2)
+    flowmos = search_flowmos(query_embedding, top_k * 2)
+
+    # 合并并按 distance 排序（distance 越小越相似）
+    all_results = memories + flowmos
+    all_results.sort(key=lambda x: x.get("distance", float("inf")))
+
+    return all_results[:top_k]
