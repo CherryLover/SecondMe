@@ -10,6 +10,14 @@ let settings = {};
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
+    // 检查登录状态
+    if (!Auth.requireAuth()) {
+        return;
+    }
+
+    // 显示用户信息
+    updateUserInfo();
+
     await loadProviders();
     await loadSettings();
     await loadTopics();
@@ -17,6 +25,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 绑定事件
     bindEvents();
 });
+
+// 更新用户信息显示
+function updateUserInfo() {
+    const user = Auth.getUser();
+    if (user) {
+        const userInfoEl = document.getElementById('user-info');
+        if (userInfoEl) {
+            userInfoEl.textContent = user.username;
+        }
+
+        // 显示/隐藏管理员功能
+        const isAdmin = Auth.isAdmin();
+        const adminBtn = document.getElementById('admin-btn');
+        if (adminBtn) {
+            adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+        }
+        const settingsBtn = document.getElementById('settings-btn');
+        if (settingsBtn) {
+            settingsBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+        }
+    }
+}
+
+// 退出登录
+function logout() {
+    if (confirm('确定要退出登录吗？')) {
+        Auth.logout();
+    }
+}
 
 // 绑定事件
 function bindEvents() {
@@ -36,16 +73,6 @@ function bindEvents() {
     document.getElementById('message-input').addEventListener('input', (e) => {
         e.target.style.height = 'auto';
         e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
-    });
-
-    // 服务商切换时加载模型列表
-    document.getElementById('provider-select').addEventListener('change', async (e) => {
-        const providerId = e.target.value;
-        if (providerId) {
-            await loadModels(providerId);
-        } else {
-            document.getElementById('model-select').innerHTML = '<option value="">选择模型</option>';
-        }
     });
 
     // 设置弹窗
@@ -90,7 +117,6 @@ async function loadProviders() {
     try {
         const data = await API.getProviders();
         providers = data.providers;
-        renderProviderSelect(providers, 'provider-select');
     } catch (error) {
         console.error('Failed to load providers:', error);
     }
@@ -100,28 +126,8 @@ async function loadProviders() {
 async function loadSettings() {
     try {
         settings = await API.getSettings();
-
-        // 设置默认服务商和模型
-        if (settings.default_chat_provider_id) {
-            document.getElementById('provider-select').value = settings.default_chat_provider_id;
-            await loadModels(settings.default_chat_provider_id);
-            if (settings.default_chat_model) {
-                document.getElementById('model-select').value = settings.default_chat_model;
-            }
-        }
     } catch (error) {
         console.error('Failed to load settings:', error);
-    }
-}
-
-// 加载模型列表
-async function loadModels(providerId) {
-    try {
-        const data = await API.getModels(providerId);
-        renderModelSelect(data.models);
-    } catch (error) {
-        console.error('Failed to load models:', error);
-        document.getElementById('model-select').innerHTML = '<option value="">加载失败</option>';
     }
 }
 
@@ -191,14 +197,6 @@ async function sendMessage() {
         return;
     }
 
-    const providerId = document.getElementById('provider-select').value;
-    const model = document.getElementById('model-select').value;
-
-    if (!providerId || !model) {
-        showToast('请先选择服务商和模型');
-        return;
-    }
-
     // 清空输入框
     input.value = '';
     input.style.height = 'auto';
@@ -212,15 +210,15 @@ async function sendMessage() {
     // 添加打字指示器
     addTypingIndicator();
 
-    // 流式发送消息
+    // 流式发送消息（使用默认 Provider 和模型）
     let assistantMessageDiv = null;
     let fullResponse = '';
 
     await API.sendMessageStream(
         currentTopicId,
         content,
-        providerId,
-        model,
+        null,  // 使用默认 Provider
+        null,  // 使用默认模型
         // onChunk
         (chunk) => {
             removeTypingIndicator();
@@ -340,7 +338,6 @@ async function saveProvider() {
         renderProviderList(providers);
         renderProviderSelect(providers, 'default-chat-provider', settings.default_chat_provider_id);
         renderProviderSelect(providers, 'embedding-provider', settings.embedding_provider_id);
-        renderProviderSelect(providers, 'provider-select');
 
         showToast('保存成功');
     } catch (error) {
@@ -361,7 +358,6 @@ async function deleteProvider(providerId) {
         renderProviderList(providers);
         renderProviderSelect(providers, 'default-chat-provider', settings.default_chat_provider_id);
         renderProviderSelect(providers, 'embedding-provider', settings.embedding_provider_id);
-        renderProviderSelect(providers, 'provider-select');
 
         showToast('删除成功');
     } catch (error) {
@@ -387,15 +383,6 @@ async function saveSettings() {
         settings = await API.updateSettings(newSettings);
         closeModal('settings-modal');
         showToast('设置已保存');
-
-        // 更新主界面的服务商选择
-        if (settings.default_chat_provider_id) {
-            document.getElementById('provider-select').value = settings.default_chat_provider_id;
-            await loadModels(settings.default_chat_provider_id);
-            if (settings.default_chat_model) {
-                document.getElementById('model-select').value = settings.default_chat_model;
-            }
-        }
     } catch (error) {
         console.error('Failed to save settings:', error);
         showToast('保存设置失败');
@@ -619,4 +606,144 @@ async function deleteAllFlowmos() {
         console.error('Failed to delete all flowmos:', error);
         showToast('删除随想失败');
     }
+}
+
+
+// ==================== 管理员功能 ====================
+
+// 打开管理员面板
+async function openAdmin() {
+    if (!Auth.isAdmin()) {
+        showToast('需要管理员权限');
+        return;
+    }
+
+    await loadInviteCodes();
+    await loadUsers();
+    openModal('admin-modal');
+}
+
+// 加载邀请码列表
+async function loadInviteCodes() {
+    try {
+        const data = await API.getInviteCodes();
+        renderInviteCodeList(data.invite_codes);
+    } catch (error) {
+        console.error('Failed to load invite codes:', error);
+    }
+}
+
+// 渲染邀请码列表
+function renderInviteCodeList(codes) {
+    const container = document.getElementById('invite-code-list');
+    if (!container) return;
+
+    if (!codes || codes.length === 0) {
+        container.innerHTML = '<p class="empty-text">暂无邀请码</p>';
+        return;
+    }
+
+    container.innerHTML = codes.map(code => `
+        <div class="invite-code-item">
+            <div class="invite-code-info">
+                <span class="invite-code">${code.code}</span>
+                <span class="invite-code-usage">${code.used_count}/${code.max_uses} 次使用</span>
+                ${code.expires_at ? `<span class="invite-code-expires">过期: ${formatDate(code.expires_at)}</span>` : ''}
+            </div>
+            <button class="btn-danger-small" onclick="deleteInviteCode('${code.id}')">删除</button>
+        </div>
+    `).join('');
+}
+
+// 创建邀请码
+async function createInviteCode() {
+    const maxUses = parseInt(document.getElementById('invite-max-uses').value) || 1;
+    const expiresDays = parseInt(document.getElementById('invite-expires-days').value) || null;
+
+    try {
+        await API.createInviteCode(maxUses, expiresDays);
+        await loadInviteCodes();
+        showToast('邀请码已创建');
+    } catch (error) {
+        console.error('Failed to create invite code:', error);
+        showToast('创建邀请码失败');
+    }
+}
+
+// 删除邀请码
+async function deleteInviteCode(codeId) {
+    if (!confirm('确定要删除这个邀请码吗？')) {
+        return;
+    }
+
+    try {
+        await API.deleteInviteCode(codeId);
+        await loadInviteCodes();
+        showToast('邀请码已删除');
+    } catch (error) {
+        console.error('Failed to delete invite code:', error);
+        showToast('删除邀请码失败');
+    }
+}
+
+// 加载用户列表
+async function loadUsers() {
+    try {
+        const data = await API.getUsers();
+        renderUserList(data.users);
+    } catch (error) {
+        console.error('Failed to load users:', error);
+    }
+}
+
+// 渲染用户列表
+function renderUserList(users) {
+    const container = document.getElementById('user-list');
+    if (!container) return;
+
+    if (!users || users.length === 0) {
+        container.innerHTML = '<p class="empty-text">暂无用户</p>';
+        return;
+    }
+
+    const currentUser = Auth.getUser();
+    container.innerHTML = users.map(user => `
+        <div class="user-item">
+            <div class="user-info">
+                <span class="user-name">${user.username}</span>
+                <span class="user-role ${user.role}">${user.role === 'admin' ? '管理员' : '用户'}</span>
+                <span class="user-created">注册: ${formatDate(user.created_at)}</span>
+            </div>
+            ${user.id !== currentUser?.id ? `<button class="btn-danger-small" onclick="deleteUser('${user.id}')">删除</button>` : ''}
+        </div>
+    `).join('');
+}
+
+// 删除用户
+async function deleteUser(userId) {
+    if (!confirm('确定要删除这个用户吗？该用户的所有数据将被删除。')) {
+        return;
+    }
+
+    try {
+        await API.deleteUser(userId);
+        await loadUsers();
+        showToast('用户已删除');
+    } catch (error) {
+        console.error('Failed to delete user:', error);
+        showToast('删除用户失败');
+    }
+}
+
+// 格式化日期
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }

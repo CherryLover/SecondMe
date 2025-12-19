@@ -1,17 +1,26 @@
 """FastAPI 主入口"""
 import json
+import secrets
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 import database
 import memory
 import ai_client
 import config
+from auth import (
+    hash_password, verify_password, create_token,
+    get_current_user, require_admin, check_token_refresh
+)
 from logger import logger
 from extraction import extraction_task
 from models import (
@@ -21,7 +30,9 @@ from models import (
     MemoryCreate, MemoryUpdate, MemoryResponse, MemoryDetailResponse, MemoriesResponse,
     FlowmoCreate, FlowmoResponse, FlowmosResponse, FlowmoTopicResponse,
     SettingsResponse, SettingsUpdate,
-    SuccessResponse, ErrorResponse
+    SuccessResponse, ErrorResponse,
+    UserRegister, UserLogin, UserResponse, TokenResponse, PasswordUpdate,
+    InviteCodeCreate, InviteCodeResponse, InviteCodesResponse, UsersResponse
 )
 
 # 初始化数据库
@@ -87,6 +98,27 @@ def init_default_provider():
 init_default_provider()
 
 
+def init_default_admin():
+    """初始化默认管理员用户"""
+    # 检查是否已有用户
+    if database.get_user_count() > 0:
+        return
+
+    # 创建默认管理员
+    password_hash = hash_password(config.ADMIN_PASSWORD)
+    user = database.create_user(config.ADMIN_USERNAME, password_hash, "admin")
+    logger.info(f"创建默认管理员: {config.ADMIN_USERNAME}")
+
+    # 为管理员创建一个初始邀请码
+    invite_code = secrets.token_urlsafe(8)
+    database.create_invite_code(invite_code, user["id"], max_uses=10)
+    logger.info(f"创建初始邀请码: {invite_code}")
+
+
+# 初始化默认管理员
+init_default_admin()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
@@ -97,7 +129,7 @@ async def lifespan(app: FastAPI):
     await extraction_task.stop()
 
 
-app = FastAPI(title="SecondMe API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="SecondMe API", version="1.2.0", lifespan=lifespan)
 
 # CORS 配置
 app.add_middleware(
@@ -106,7 +138,25 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-New-Token"],  # 暴露自定义响应头给前端
 )
+
+
+# Token 滑动过期中间件
+@app.middleware("http")
+async def token_refresh_middleware(request: Request, call_next):
+    response = await call_next(request)
+
+    # 检查请求是否携带 Authorization 头
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        # 检查是否需要刷新 token
+        new_token = check_token_refresh(token)
+        if new_token:
+            response.headers["X-New-Token"] = new_token
+
+    return response
 
 
 # 请求日志中间件
@@ -134,34 +184,192 @@ async def log_requests(request: Request, call_next):
 logger.info("SecondMe API 服务启动")
 
 
+# ==================== Auth ====================
+
+@app.post("/api/auth/register", response_model=TokenResponse)
+def register(body: UserRegister):
+    """用户注册"""
+    # 验证邀请码
+    if not database.is_invite_code_valid(body.invite_code):
+        raise HTTPException(status_code=400, detail="Invalid or expired invite code")
+
+    # 检查用户名是否已存在
+    if database.get_user_by_username(body.username):
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    # 创建用户
+    password_hash = hash_password(body.password)
+    user = database.create_user(body.username, password_hash)
+
+    # 使用邀请码
+    invite = database.get_invite_code_by_code(body.invite_code)
+    database.use_invite_code(invite["id"], user["id"])
+
+    # 生成 token
+    token = create_token(user["id"], user["role"])
+
+    logger.info(f"[Auth] 新用户注册: {body.username}")
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+def login(body: UserLogin):
+    """用户登录"""
+    user = database.get_user_by_username(body.username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    # 更新登录时间
+    database.update_user_login_time(user["id"])
+
+    # 生成 token
+    token = create_token(user["id"], user["role"])
+
+    logger.info(f"[Auth] 用户登录: {body.username}")
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "role": user["role"],
+            "created_at": user["created_at"],
+            "last_login_at": user["last_login_at"]
+        }
+    }
+
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """获取当前用户信息"""
+    user = database.get_user(current_user["user_id"])
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "role": user["role"],
+        "created_at": user["created_at"],
+        "last_login_at": user["last_login_at"]
+    }
+
+
+@app.put("/api/auth/password", response_model=SuccessResponse)
+def update_password(body: PasswordUpdate, current_user: dict = Depends(get_current_user)):
+    """修改密码"""
+    user = database.get_user(current_user["user_id"])
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not verify_password(body.old_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Old password is incorrect")
+
+    new_hash = hash_password(body.new_password)
+    database.update_user_password(user["id"], new_hash)
+
+    logger.info(f"[Auth] 用户修改密码: {user['username']}")
+    return {"success": True}
+
+
+# ==================== Admin ====================
+
+@app.post("/api/admin/invite-codes", response_model=InviteCodeResponse)
+def create_invite_code(body: InviteCodeCreate, current_user: dict = Depends(require_admin)):
+    """创建邀请码（管理员）"""
+    code = secrets.token_urlsafe(8)
+    expires_at = None
+    if body.expires_days:
+        expires_at = (datetime.now() + timedelta(days=body.expires_days)).isoformat()
+
+    invite = database.create_invite_code(code, current_user["user_id"], body.max_uses, expires_at)
+    logger.info(f"[Admin] 创建邀请码: {code}")
+    return invite
+
+
+@app.get("/api/admin/invite-codes", response_model=InviteCodesResponse)
+def get_invite_codes(current_user: dict = Depends(require_admin)):
+    """获取邀请码列表（管理员）"""
+    codes = database.get_invite_codes()
+    return {"invite_codes": codes}
+
+
+@app.delete("/api/admin/invite-codes/{code_id}", response_model=SuccessResponse)
+def delete_invite_code(code_id: str, current_user: dict = Depends(require_admin)):
+    """删除邀请码（管理员）"""
+    success = database.delete_invite_code(code_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Invite code not found")
+    return {"success": True}
+
+
+@app.get("/api/admin/users", response_model=UsersResponse)
+def get_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(require_admin)
+):
+    """获取用户列表（管理员）"""
+    users, total = database.get_users(page, page_size)
+    return {
+        "users": users,
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+@app.delete("/api/admin/users/{user_id}", response_model=SuccessResponse)
+def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
+    """删除用户（管理员）"""
+    # 不能删除自己
+    if user_id == current_user["user_id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    success = database.delete_user(user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True}
+
+
 # ==================== Topics ====================
 
 @app.post("/api/topics", response_model=TopicResponse)
-def create_topic(body: TopicCreate = None):
+def create_topic(body: TopicCreate = None, current_user: dict = Depends(get_current_user)):
     """创建话题"""
-    topic = database.create_topic()
+    topic = database.create_topic(current_user["user_id"])
     return topic
 
 
 @app.get("/api/topics", response_model=TopicsResponse)
-def get_topics():
+def get_topics(current_user: dict = Depends(get_current_user)):
     """获取话题列表"""
-    topics = database.get_topics()
+    topics = database.get_topics(current_user["user_id"])
     return {"topics": topics}
 
 
 @app.get("/api/topics/{topic_id}", response_model=TopicResponse)
-def get_topic(topic_id: str):
+def get_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
     """获取单个话题"""
     topic = database.get_topic(topic_id)
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
+    if topic.get("user_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     return topic
 
 
 @app.patch("/api/topics/{topic_id}", response_model=TopicResponse)
-def update_topic(topic_id: str, body: TopicUpdate):
+def update_topic(topic_id: str, body: TopicUpdate, current_user: dict = Depends(get_current_user)):
     """更新话题标题"""
+    if not database.verify_topic_owner(topic_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
     topic = database.update_topic(topic_id, body.title)
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -169,8 +377,11 @@ def update_topic(topic_id: str, body: TopicUpdate):
 
 
 @app.delete("/api/topics/{topic_id}", response_model=SuccessResponse)
-def delete_topic(topic_id: str):
+def delete_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
     """删除话题"""
+    if not database.verify_topic_owner(topic_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     # 删除相关的记忆向量
     messages = database.get_messages(topic_id)
     for msg in messages:
@@ -185,22 +396,22 @@ def delete_topic(topic_id: str):
 # ==================== Messages ====================
 
 @app.get("/api/topics/{topic_id}/messages", response_model=MessagesResponse)
-def get_messages(topic_id: str):
+def get_messages(topic_id: str, current_user: dict = Depends(get_current_user)):
     """获取话题的消息列表"""
-    topic = database.get_topic(topic_id)
-    if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
+    if not database.verify_topic_owner(topic_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
 
     messages = database.get_messages(topic_id)
     return {"messages": messages}
 
 
 @app.post("/api/topics/{topic_id}/messages", response_model=SendMessageResponse)
-def send_message(topic_id: str, body: MessageCreate):
+def send_message(topic_id: str, body: MessageCreate, current_user: dict = Depends(get_current_user)):
     """发送消息（同步）"""
-    topic = database.get_topic(topic_id)
-    if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
+    if not database.verify_topic_owner(topic_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    user_id = current_user["user_id"]
 
     # 判断是否是 Flowmo 话题
     is_flowmo_topic = bool(topic.get("is_flowmo", 0))
@@ -227,7 +438,7 @@ def send_message(topic_id: str, body: MessageCreate):
     # Flowmo 话题特殊处理
     if is_flowmo_topic:
         # 处理 Flowmo 记录
-        _handle_flowmo_record(topic_id, user_message, settings)
+        _handle_flowmo_record(topic_id, user_message, settings, user_id)
 
         # 获取 Flowmo 上下文（不受 MAX_CONTEXT_MESSAGES 限制）
         chat_messages = _get_flowmo_context_messages(topic_id, user_message)
@@ -258,7 +469,7 @@ def send_message(topic_id: str, body: MessageCreate):
         system_prompt = None
         if settings.get("embedding_provider_id") and settings.get("embedding_model"):
             try:
-                retrieved_memories = _retrieve_memories(body.content, settings)
+                retrieved_memories = _retrieve_memories(body.content, settings, user_id)
                 if retrieved_memories:
                     memories_used = [m["id"] for m in retrieved_memories]
                     logger.info(f"[Memory] 检索到 {len(retrieved_memories)} 条相关记忆")
@@ -319,11 +530,12 @@ def send_message(topic_id: str, body: MessageCreate):
 
 
 @app.post("/api/topics/{topic_id}/messages/stream")
-async def send_message_stream(topic_id: str, body: MessageCreate):
+async def send_message_stream(topic_id: str, body: MessageCreate, current_user: dict = Depends(get_current_user)):
     """发送消息（流式）"""
-    topic = database.get_topic(topic_id)
-    if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
+    if not database.verify_topic_owner(topic_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    user_id = current_user["user_id"]
 
     # 判断是否是 Flowmo 话题
     is_flowmo_topic = bool(topic.get("is_flowmo", 0))
@@ -350,7 +562,7 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
     # Flowmo 话题特殊处理
     if is_flowmo_topic:
         # 处理 Flowmo 记录
-        _handle_flowmo_record(topic_id, user_message, settings)
+        _handle_flowmo_record(topic_id, user_message, settings, user_id)
 
         # 获取 Flowmo 上下文（不受 MAX_CONTEXT_MESSAGES 限制）
         chat_messages = _get_flowmo_context_messages(topic_id, user_message)
@@ -381,7 +593,7 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
         system_prompt = None
         if settings.get("embedding_provider_id") and settings.get("embedding_model"):
             try:
-                retrieved_memories = _retrieve_memories(body.content, settings)
+                retrieved_memories = _retrieve_memories(body.content, settings, user_id)
                 if retrieved_memories:
                     memories_used = [m["id"] for m in retrieved_memories]
                     logger.info(f"[Memory] 检索到 {len(retrieved_memories)} 条相关记忆")
@@ -451,22 +663,22 @@ async def send_message_stream(topic_id: str, body: MessageCreate):
 # ==================== Providers ====================
 
 @app.post("/api/providers", response_model=ProviderResponse)
-def create_provider(body: ProviderCreate):
-    """创建服务商"""
+def create_provider(body: ProviderCreate, current_user: dict = Depends(require_admin)):
+    """创建服务商（管理员）"""
     provider = database.create_provider(body.name, body.base_url, body.api_key, body.enabled)
     return provider
 
 
 @app.get("/api/providers", response_model=ProvidersResponse)
-def get_providers():
+def get_providers(current_user: dict = Depends(get_current_user)):
     """获取服务商列表"""
     providers = database.get_providers()
     return {"providers": providers}
 
 
 @app.put("/api/providers/{provider_id}", response_model=ProviderResponse)
-def update_provider(provider_id: str, body: ProviderUpdate):
-    """更新服务商"""
+def update_provider(provider_id: str, body: ProviderUpdate, current_user: dict = Depends(require_admin)):
+    """更新服务商（管理员）"""
     provider = database.update_provider(provider_id, body.name, body.base_url, body.api_key, body.enabled)
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -474,8 +686,8 @@ def update_provider(provider_id: str, body: ProviderUpdate):
 
 
 @app.delete("/api/providers/{provider_id}", response_model=SuccessResponse)
-def delete_provider(provider_id: str):
-    """删除服务商"""
+def delete_provider(provider_id: str, current_user: dict = Depends(require_admin)):
+    """删除服务商（管理员）"""
     success = database.delete_provider(provider_id)
     if not success:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -483,7 +695,7 @@ def delete_provider(provider_id: str):
 
 
 @app.get("/api/providers/{provider_id}/models", response_model=ModelsResponse)
-def get_provider_models(provider_id: str):
+def get_provider_models(provider_id: str, current_user: dict = Depends(get_current_user)):
     """获取服务商的模型列表"""
     try:
         models = ai_client.get_models(provider_id)
@@ -498,10 +710,11 @@ def get_provider_models(provider_id: str):
 def get_memories(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    source: Optional[str] = Query(None)
+    source: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
 ):
     """获取记忆列表"""
-    memories, total = database.get_memories(page, page_size, source)
+    memories, total = database.get_memories(current_user["user_id"], page, page_size, source)
     return {
         "memories": memories,
         "total": total,
@@ -511,21 +724,25 @@ def get_memories(
 
 
 @app.get("/api/memories/{memory_id}", response_model=MemoryDetailResponse)
-def get_memory(memory_id: str):
+def get_memory(memory_id: str, current_user: dict = Depends(get_current_user)):
     """获取记忆详情"""
     mem = database.get_memory(memory_id)
     if not mem:
         raise HTTPException(status_code=404, detail="Memory not found")
+    if mem.get("user_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     usage_records = database.get_memory_usage(memory_id)
     return {**mem, "usage_records": usage_records}
 
 
 @app.post("/api/memories", response_model=MemoryResponse)
-def create_memory(body: MemoryCreate):
+def create_memory(body: MemoryCreate, current_user: dict = Depends(get_current_user)):
     """手动添加记忆"""
+    user_id = current_user["user_id"]
+
     # 创建记忆记录
-    mem = database.create_memory(body.content, "manual")
+    mem = database.create_memory(user_id, body.content, "manual")
 
     # 存储向量
     settings = _get_settings()
@@ -536,7 +753,7 @@ def create_memory(body: MemoryCreate):
                 settings["embedding_model"],
                 body.content
             )
-            memory.store_memory_vector(mem["id"], body.content, embedding, "manual")
+            memory.store_memory_vector(mem["id"], body.content, embedding, "manual", user_id)
         except Exception:
             pass  # 向量存储失败不影响记忆创建
 
@@ -544,8 +761,11 @@ def create_memory(body: MemoryCreate):
 
 
 @app.put("/api/memories/{memory_id}", response_model=MemoryResponse)
-def update_memory(memory_id: str, body: MemoryUpdate):
+def update_memory(memory_id: str, body: MemoryUpdate, current_user: dict = Depends(get_current_user)):
     """更新记忆"""
+    if not database.verify_memory_owner(memory_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     mem = database.update_memory(memory_id, body.content)
     if not mem:
         raise HTTPException(status_code=404, detail="Memory not found")
@@ -580,8 +800,11 @@ def delete_all_memories():
 
 
 @app.delete("/api/memories/{memory_id}", response_model=SuccessResponse)
-def delete_memory(memory_id: str):
+def delete_memory(memory_id: str, current_user: dict = Depends(get_current_user)):
     """删除记忆"""
+    if not database.verify_memory_owner(memory_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     # 删除向量
     memory.delete_memory_vector(memory_id)
 
@@ -595,13 +818,13 @@ def delete_memory(memory_id: str):
 # ==================== Settings ====================
 
 @app.get("/api/settings", response_model=SettingsResponse)
-def get_settings():
+def get_settings(current_user: dict = Depends(get_current_user)):
     """获取配置"""
     return _get_settings()
 
 
 @app.put("/api/settings", response_model=SettingsResponse)
-def update_settings(body: SettingsUpdate):
+def update_settings(body: SettingsUpdate, current_user: dict = Depends(require_admin)):
     """更新配置"""
     if body.default_chat_provider_id is not None:
         database.set_setting("default_chat_provider_id", body.default_chat_provider_id)
@@ -719,8 +942,8 @@ def _get_settings() -> dict:
     }
 
 
-def _retrieve_memories(query: str, settings: dict) -> list[dict]:
-    """检索相关记忆（包括记忆和 Flowmo）"""
+def _retrieve_memories(query: str, settings: dict, user_id: str) -> list[dict]:
+    """检索用户的相关记忆（包括记忆和 Flowmo）"""
     if not settings.get("embedding_provider_id") or not settings.get("embedding_model"):
         return []
 
@@ -733,7 +956,7 @@ def _retrieve_memories(query: str, settings: dict) -> list[dict]:
 
     # 联合搜索记忆和 Flowmo
     top_k = settings.get("memory_top_k", 5)
-    return memory.search_memories_and_flowmos(embedding, top_k)
+    return memory.search_memories_and_flowmos(embedding, user_id, top_k)
 
 
 def _is_new_flowmo(topic_id: str, last_message_time: str) -> bool:
@@ -741,7 +964,6 @@ def _is_new_flowmo(topic_id: str, last_message_time: str) -> bool:
     if not last_message_time:
         return True
 
-    from datetime import datetime, timedelta
     last_time = datetime.fromisoformat(last_message_time)
     now = datetime.now()
     interval = timedelta(minutes=config.FLOWMO_INTERVAL_MINUTES)
@@ -786,7 +1008,7 @@ def _get_flowmo_context_messages(topic_id: str, current_message: dict) -> list[d
     return context_messages if context_messages else [{"role": current_message["role"], "content": current_message["content"]}]
 
 
-def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict) -> bool:
+def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict, user_id: str) -> bool:
     """处理 Flowmo 记录
 
     返回：是否创建了新的 Flowmo 记录
@@ -801,6 +1023,7 @@ def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict) -> 
     if _is_new_flowmo(topic_id, last_message_time):
         # 创建 Flowmo 记录
         flowmo = database.create_flowmo(
+            user_id=user_id,
             content=user_message["content"],
             source="chat",
             topic_id=topic_id,
@@ -816,7 +1039,7 @@ def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict) -> 
                     settings["embedding_model"],
                     user_message["content"]
                 )
-                memory.store_flowmo_vector(flowmo["id"], user_message["content"], embedding)
+                memory.store_flowmo_vector(flowmo["id"], user_message["content"], embedding, user_id)
                 logger.info(f"[Flowmo] 向量化成功")
             except Exception as e:
                 logger.warning(f"[Flowmo] 向量化失败: {str(e)}")
@@ -830,6 +1053,29 @@ def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict) -> 
 FLOWMO_SYSTEM_PROMPT = """你是一个善于倾听的伙伴。用户在记录自己的想法、情绪或日常。
 请以温和、共情的方式回应，可以简短也可以展开聊聊。
 不要急于给建议，先理解和陪伴。"""
+
+
+# ==================== 静态文件托管 ====================
+
+# Web 目录路径
+WEB_DIR = Path(__file__).parent.parent / "web"
+
+
+@app.get("/login.html")
+async def login_page():
+    """登录页面"""
+    return FileResponse(WEB_DIR / "login.html")
+
+
+@app.get("/")
+async def index_page():
+    """主页面"""
+    return FileResponse(WEB_DIR / "index.html")
+
+
+# 挂载静态资源（CSS、JS）
+app.mount("/css", StaticFiles(directory=WEB_DIR / "css"), name="css")
+app.mount("/js", StaticFiles(directory=WEB_DIR / "js"), name="js")
 
 
 if __name__ == "__main__":

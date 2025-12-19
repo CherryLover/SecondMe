@@ -3,6 +3,67 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+# ==================== Auth ====================
+
+class UserRegister(BaseModel):
+    username: str
+    password: str
+    invite_code: str
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+    created_at: str
+    last_login_at: Optional[str] = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class PasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
+
+# ==================== Invite Code ====================
+
+class InviteCodeCreate(BaseModel):
+    max_uses: int = 1
+    expires_days: Optional[int] = None
+
+
+class InviteCodeResponse(BaseModel):
+    id: str
+    code: str
+    max_uses: int
+    used_count: int
+    expires_at: Optional[str] = None
+    created_at: str
+
+
+class InviteCodesResponse(BaseModel):
+    invite_codes: list[InviteCodeResponse]
+
+
+# ==================== User Management ====================
+
+class UsersResponse(BaseModel):
+    users: list[UserResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 # ==================== Topic ====================
 
 class TopicCreate(BaseModel):

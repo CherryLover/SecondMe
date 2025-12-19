@@ -64,13 +64,15 @@ def init_database():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS topics (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active_at TIMESTAMP,
                 memory_processed_at TIMESTAMP,
                 last_processed_message_id TEXT,
-                is_flowmo INTEGER DEFAULT 0
+                is_flowmo INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
 
@@ -102,6 +104,7 @@ def init_database():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
                 content TEXT NOT NULL,
                 source TEXT NOT NULL CHECK(source IN ('chat', 'manual')),
                 source_topic_id TEXT,
@@ -110,6 +113,7 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_used_at TIMESTAMP,
                 memory_type TEXT DEFAULT 'chat',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (source_topic_id) REFERENCES topics(id) ON DELETE SET NULL,
                 FOREIGN KEY (source_message_id) REFERENCES messages(id) ON DELETE SET NULL
             )
@@ -137,15 +141,55 @@ def init_database():
             )
         """)
 
+        # 创建用户表（需要在其他表之前创建，因为其他表依赖它）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login_at TIMESTAMP
+            )
+        """)
+
+        # 创建邀请码表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                id TEXT PRIMARY KEY,
+                code TEXT NOT NULL UNIQUE,
+                max_uses INTEGER DEFAULT 1,
+                used_count INTEGER DEFAULT 0,
+                created_by TEXT NOT NULL,
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+        """)
+
+        # 创建邀请码使用记录表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS invite_code_usage (
+                id TEXT PRIMARY KEY,
+                invite_code_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (invite_code_id) REFERENCES invite_codes(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
         # 创建 Flowmo 表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS flowmos (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
                 content TEXT NOT NULL,
                 source TEXT NOT NULL CHECK(source IN ('chat', 'direct')),
                 topic_id TEXT,
                 message_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE SET NULL,
                 FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
             )
@@ -156,42 +200,50 @@ def init_database():
 
         # 创建索引
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_topics_updated_at ON topics(updated_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_topics_user_id ON topics(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_topics_user_updated ON topics(user_id, updated_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_topic_id ON messages(topic_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(topic_id, created_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memories_source ON memories(source)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_memories_user_id ON memories(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memories_use_count ON memories(use_count DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memories_last_used ON memories(last_used_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_usage_memory_id ON memory_usage(memory_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_usage_topic_id ON memory_usage(topic_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_flowmos_created_at ON flowmos(created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_flowmos_user_id ON flowmos(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes(code)")
 
 
 # ==================== Topics ====================
 
-def create_topic(title: str = "新话题") -> dict:
+def create_topic(user_id: str, title: str = "新话题") -> dict:
     """创建话题"""
     topic_id = str(uuid4())
     now = datetime.now().isoformat()
 
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO topics (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (topic_id, title, now, now)
+            "INSERT INTO topics (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (topic_id, user_id, title, now, now)
         )
 
     return {
         "id": topic_id,
+        "user_id": user_id,
         "title": title,
         "created_at": now,
         "updated_at": now
     }
 
 
-def get_topics() -> list[dict]:
-    """获取所有话题"""
+def get_topics(user_id: str) -> list[dict]:
+    """获取用户的所有话题"""
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM topics ORDER BY updated_at DESC"
+            "SELECT * FROM topics WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,)
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -203,6 +255,12 @@ def get_topic(topic_id: str) -> Optional[dict]:
             "SELECT * FROM topics WHERE id = ?", (topic_id,)
         ).fetchone()
     return dict(row) if row else None
+
+
+def verify_topic_owner(topic_id: str, user_id: str) -> bool:
+    """验证话题是否属于指定用户"""
+    topic = get_topic(topic_id)
+    return topic is not None and topic.get("user_id") == user_id
 
 
 def update_topic(topic_id: str, title: str) -> Optional[dict]:
@@ -350,20 +408,21 @@ def delete_provider(provider_id: str) -> bool:
 
 # ==================== Memories ====================
 
-def create_memory(content: str, source: str, source_topic_id: Optional[str] = None, source_message_id: Optional[str] = None) -> dict:
+def create_memory(user_id: str, content: str, source: str, source_topic_id: Optional[str] = None, source_message_id: Optional[str] = None) -> dict:
     """创建记忆"""
     memory_id = str(uuid4())
     now = datetime.now().isoformat()
 
     with get_db() as conn:
         conn.execute(
-            """INSERT INTO memories (id, content, source, source_topic_id, source_message_id, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (memory_id, content, source, source_topic_id, source_message_id, now)
+            """INSERT INTO memories (id, user_id, content, source, source_topic_id, source_message_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (memory_id, user_id, content, source, source_topic_id, source_message_id, now)
         )
 
     return {
         "id": memory_id,
+        "user_id": user_id,
         "content": content,
         "source": source,
         "source_topic_id": source_topic_id,
@@ -374,10 +433,11 @@ def create_memory(content: str, source: str, source_topic_id: Optional[str] = No
     }
 
 
-def get_memories(page: int = 1, page_size: int = 20, source: Optional[str] = None, exclude_raw_chat: bool = True) -> tuple[list[dict], int]:
-    """获取记忆列表
+def get_memories(user_id: str, page: int = 1, page_size: int = 20, source: Optional[str] = None, exclude_raw_chat: bool = True) -> tuple[list[dict], int]:
+    """获取用户的记忆列表
 
     Args:
+        user_id: 用户ID
         page: 页码
         page_size: 每页数量
         source: 过滤来源（chat/manual）
@@ -388,9 +448,9 @@ def get_memories(page: int = 1, page_size: int = 20, source: Optional[str] = Non
     # 构建过滤条件：排除原始对话记忆（memory_type='chat' 或为空的 source='chat' 记录）
     # 只保留：提炼后的记忆（memory_type in personal/preference/fact/plan）和手动添加的记忆
     if exclude_raw_chat:
-        base_condition = "(source = 'manual' OR (source = 'chat' AND memory_type IS NOT NULL AND memory_type != 'chat'))"
+        base_condition = "user_id = ? AND (source = 'manual' OR (source = 'chat' AND memory_type IS NOT NULL AND memory_type != 'chat'))"
     else:
-        base_condition = "1=1"
+        base_condition = "user_id = ?"
 
     with get_db() as conn:
         if source:
@@ -399,19 +459,21 @@ def get_memories(page: int = 1, page_size: int = 20, source: Optional[str] = Non
                 f"""SELECT * FROM memories WHERE {where_clause}
                    ORDER BY created_at DESC
                    LIMIT ? OFFSET ?""",
-                (source, page_size, offset)
+                (user_id, source, page_size, offset)
             ).fetchall()
             total = conn.execute(
-                f"SELECT COUNT(*) as count FROM memories WHERE {where_clause}", (source,)
+                f"SELECT COUNT(*) as count FROM memories WHERE {where_clause}", (user_id, source)
             ).fetchone()["count"]
         else:
             rows = conn.execute(
                 f"""SELECT * FROM memories WHERE {base_condition}
                    ORDER BY created_at DESC
                    LIMIT ? OFFSET ?""",
-                (page_size, offset)
+                (user_id, page_size, offset)
             ).fetchall()
-            total = conn.execute(f"SELECT COUNT(*) as count FROM memories WHERE {base_condition}").fetchone()["count"]
+            total = conn.execute(
+                f"SELECT COUNT(*) as count FROM memories WHERE {base_condition}", (user_id,)
+            ).fetchone()["count"]
 
     return [dict(row) for row in rows], total
 
@@ -423,6 +485,12 @@ def get_memory(memory_id: str) -> Optional[dict]:
             "SELECT * FROM memories WHERE id = ?", (memory_id,)
         ).fetchone()
     return dict(row) if row else None
+
+
+def verify_memory_owner(memory_id: str, user_id: str) -> bool:
+    """验证记忆是否属于指定用户"""
+    mem = get_memory(memory_id)
+    return mem is not None and mem.get("user_id") == user_id
 
 
 def get_memory_usage(memory_id: str) -> list[dict]:
@@ -515,6 +583,183 @@ def get_all_settings() -> dict:
     return {row["key"]: row["value"] for row in rows}
 
 
+# ==================== Users ====================
+
+def create_user(username: str, password_hash: str, role: str = "user") -> dict:
+    """创建用户"""
+    user_id = str(uuid4())
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, username, password_hash, role, now)
+        )
+
+    return {
+        "id": user_id,
+        "username": username,
+        "role": role,
+        "created_at": now,
+        "last_login_at": None
+    }
+
+
+def get_user_by_username(username: str) -> Optional[dict]:
+    """通过用户名获取用户"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user(user_id: str) -> Optional[dict]:
+    """获取用户"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def update_user_login_time(user_id: str):
+    """更新登录时间"""
+    now = datetime.now().isoformat()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET last_login_at = ? WHERE id = ?",
+            (now, user_id)
+        )
+
+
+def get_users(page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    """获取用户列表"""
+    offset = (page - 1) * page_size
+
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, username, role, created_at, last_login_at FROM users
+               ORDER BY created_at DESC
+               LIMIT ? OFFSET ?""",
+            (page_size, offset)
+        ).fetchall()
+        total = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()["count"]
+
+    return [dict(row) for row in rows], total
+
+
+def delete_user(user_id: str) -> bool:
+    """删除用户"""
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    return cursor.rowcount > 0
+
+
+def update_user_password(user_id: str, password_hash: str) -> bool:
+    """更新用户密码"""
+    with get_db() as conn:
+        cursor = conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id)
+        )
+    return cursor.rowcount > 0
+
+
+def get_user_count() -> int:
+    """获取用户总数"""
+    with get_db() as conn:
+        row = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()
+    return row["count"] if row else 0
+
+
+# ==================== Invite Codes ====================
+
+def create_invite_code(code: str, created_by: str, max_uses: int = 1, expires_at: Optional[str] = None) -> dict:
+    """创建邀请码"""
+    code_id = str(uuid4())
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO invite_codes (id, code, max_uses, created_by, expires_at, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (code_id, code, max_uses, created_by, expires_at, now)
+        )
+
+    return {
+        "id": code_id,
+        "code": code,
+        "max_uses": max_uses,
+        "used_count": 0,
+        "expires_at": expires_at,
+        "created_at": now
+    }
+
+
+def get_invite_code_by_code(code: str) -> Optional[dict]:
+    """通过邀请码获取记录"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM invite_codes WHERE code = ?", (code,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_invite_codes() -> list[dict]:
+    """获取所有邀请码"""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM invite_codes ORDER BY created_at DESC"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def use_invite_code(code_id: str, user_id: str) -> bool:
+    """使用邀请码"""
+    usage_id = str(uuid4())
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        # 记录使用
+        conn.execute(
+            "INSERT INTO invite_code_usage (id, invite_code_id, user_id, used_at) VALUES (?, ?, ?, ?)",
+            (usage_id, code_id, user_id, now)
+        )
+        # 增加使用次数
+        conn.execute(
+            "UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?",
+            (code_id,)
+        )
+    return True
+
+
+def delete_invite_code(code_id: str) -> bool:
+    """删除邀请码"""
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM invite_codes WHERE id = ?", (code_id,))
+    return cursor.rowcount > 0
+
+
+def is_invite_code_valid(code: str) -> bool:
+    """检查邀请码是否有效"""
+    invite = get_invite_code_by_code(code)
+    if not invite:
+        return False
+
+    # 检查使用次数（0 表示无限制）
+    if invite["max_uses"] > 0 and invite["used_count"] >= invite["max_uses"]:
+        return False
+
+    # 检查过期时间
+    if invite["expires_at"]:
+        expires_at = datetime.fromisoformat(invite["expires_at"])
+        if datetime.now() > expires_at:
+            return False
+
+    return True
+
+
 # ==================== 记忆提炼相关 ====================
 
 def update_topic_active_time(topic_id: str):
@@ -600,6 +845,7 @@ def mark_topic_processed(topic_id: str, last_message_id: str):
 
 
 def create_extracted_memory(
+    user_id: str,
     content: str,
     memory_type: str,
     source_topic_id: Optional[str] = None
@@ -610,13 +856,14 @@ def create_extracted_memory(
 
     with get_db() as conn:
         conn.execute(
-            """INSERT INTO memories (id, content, source, source_topic_id, memory_type, created_at)
-               VALUES (?, ?, 'chat', ?, ?, ?)""",
-            (memory_id, content, source_topic_id, memory_type, now)
+            """INSERT INTO memories (id, user_id, content, source, source_topic_id, memory_type, created_at)
+               VALUES (?, ?, ?, 'chat', ?, ?, ?)""",
+            (memory_id, user_id, content, source_topic_id, memory_type, now)
         )
 
     return {
         "id": memory_id,
+        "user_id": user_id,
         "content": content,
         "source": "chat",
         "source_topic_id": source_topic_id,
@@ -639,11 +886,12 @@ def update_memory_content(memory_id: str, content: str) -> Optional[dict]:
 
 # ==================== Flowmo ====================
 
-def get_or_create_flowmo_topic() -> dict:
-    """获取或创建 Flowmo 话题"""
+def get_or_create_flowmo_topic(user_id: str) -> dict:
+    """获取或创建用户的 Flowmo 话题"""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM topics WHERE is_flowmo = 1"
+            "SELECT * FROM topics WHERE user_id = ? AND is_flowmo = 1",
+            (user_id,)
         ).fetchone()
 
         if row:
@@ -653,12 +901,13 @@ def get_or_create_flowmo_topic() -> dict:
         topic_id = str(uuid4())
         now = datetime.now().isoformat()
         conn.execute(
-            "INSERT INTO topics (id, title, created_at, updated_at, is_flowmo) VALUES (?, ?, ?, ?, 1)",
-            (topic_id, "Flowmo", now, now)
+            "INSERT INTO topics (id, user_id, title, created_at, updated_at, is_flowmo) VALUES (?, ?, ?, ?, ?, 1)",
+            (topic_id, user_id, "Flowmo", now, now)
         )
 
     return {
         "id": topic_id,
+        "user_id": user_id,
         "title": "Flowmo",
         "created_at": now,
         "updated_at": now,
@@ -686,19 +935,20 @@ def get_messages_since(topic_id: str, since_time: str) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def create_flowmo(content: str, source: str, topic_id: Optional[str] = None, message_id: Optional[str] = None) -> dict:
+def create_flowmo(user_id: str, content: str, source: str, topic_id: Optional[str] = None, message_id: Optional[str] = None) -> dict:
     """创建 Flowmo 记录"""
     flowmo_id = str(uuid4())
     now = datetime.now().isoformat()
 
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO flowmos (id, content, source, topic_id, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (flowmo_id, content, source, topic_id, message_id, now)
+            "INSERT INTO flowmos (id, user_id, content, source, topic_id, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (flowmo_id, user_id, content, source, topic_id, message_id, now)
         )
 
     return {
         "id": flowmo_id,
+        "user_id": user_id,
         "content": content,
         "source": source,
         "topic_id": topic_id,
@@ -707,16 +957,18 @@ def create_flowmo(content: str, source: str, topic_id: Optional[str] = None, mes
     }
 
 
-def get_flowmos(page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
-    """获取 Flowmo 列表（分页）"""
+def get_flowmos(user_id: str, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    """获取用户的 Flowmo 列表（分页）"""
     offset = (page - 1) * page_size
 
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM flowmos ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (page_size, offset)
+            "SELECT * FROM flowmos WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (user_id, page_size, offset)
         ).fetchall()
-        total = conn.execute("SELECT COUNT(*) as count FROM flowmos").fetchone()["count"]
+        total = conn.execute(
+            "SELECT COUNT(*) as count FROM flowmos WHERE user_id = ?", (user_id,)
+        ).fetchone()["count"]
 
     return [dict(row) for row in rows], total
 
@@ -730,6 +982,12 @@ def get_flowmo(flowmo_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def verify_flowmo_owner(flowmo_id: str, user_id: str) -> bool:
+    """验证 Flowmo 是否属于指定用户"""
+    flowmo = get_flowmo(flowmo_id)
+    return flowmo is not None and flowmo.get("user_id") == user_id
+
+
 def delete_flowmo(flowmo_id: str) -> bool:
     """删除 Flowmo"""
     with get_db() as conn:
@@ -737,12 +995,12 @@ def delete_flowmo(flowmo_id: str) -> bool:
     return cursor.rowcount > 0
 
 
-def delete_all_flowmos() -> tuple[int, list[str]]:
-    """删除所有 Flowmo，返回删除的数量和ID列表"""
+def delete_all_flowmos(user_id: str) -> tuple[int, list[str]]:
+    """删除用户的所有 Flowmo，返回删除的数量和ID列表"""
     with get_db() as conn:
-        rows = conn.execute("SELECT id FROM flowmos").fetchall()
+        rows = conn.execute("SELECT id FROM flowmos WHERE user_id = ?", (user_id,)).fetchall()
         flowmo_ids = [row["id"] for row in rows]
-        cursor = conn.execute("DELETE FROM flowmos")
+        cursor = conn.execute("DELETE FROM flowmos WHERE user_id = ?", (user_id,))
         count = cursor.rowcount
 
     return count, flowmo_ids

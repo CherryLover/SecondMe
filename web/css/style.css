@@ -109,7 +109,38 @@ body {
     padding: 12px;
     border-top: 1px solid var(--border-color);
     display: flex;
+    flex-direction: column;
     gap: 8px;
+}
+
+.user-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: var(--hover-bg);
+    border-radius: 8px;
+}
+
+.user-name-display {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.btn-logout {
+    padding: 4px;
+    color: var(--text-secondary);
+}
+
+.btn-logout:hover {
+    color: var(--danger-color);
+}
+
+.footer-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
 }
 
 /* 主内容区 */
@@ -754,6 +785,121 @@ body {
     }
 }
 
+/* 管理员面板 */
+.admin-section {
+    margin-bottom: 32px;
+}
+
+.admin-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-color);
+}
+
+.invite-code-form {
+    margin-bottom: 16px;
+}
+
+.form-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.form-row .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.form-row .btn-primary {
+    width: auto;
+    white-space: nowrap;
+}
+
+.invite-code-list,
+.user-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.invite-code-item,
+.user-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.invite-code-info,
+.user-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: center;
+    flex: 1;
+}
+
+.invite-code {
+    font-family: monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background-color: var(--hover-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.invite-code-usage,
+.invite-code-expires {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.user-name {
+    font-weight: 500;
+}
+
+.user-role {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background-color: var(--hover-bg);
+}
+
+.user-role.admin {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.user-created {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.btn-danger-small {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-danger-small:hover {
+    background-color: #dc2626;
+}
+
+.empty-text {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 24px;
+}
+
 /* 响应式 */
 @media (max-width: 768px) {
     .sidebar {
@@ -774,5 +920,13 @@ body {
 
     .message-content {
         max-width: 90%;
+    }
+
+    .form-row {
+        flex-direction: column;
+    }
+
+    .form-row .btn-primary {
+        width: 100%;
     }
 }

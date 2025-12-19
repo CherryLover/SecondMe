@@ -45,3 +45,12 @@ MAX_CONTEXT_MESSAGES = int(os.getenv("MAX_CONTEXT_MESSAGES", "100"))
 
 # Flowmo 配置
 FLOWMO_INTERVAL_MINUTES = int(os.getenv("FLOWMO_INTERVAL_MINUTES", "5"))
+
+# JWT 配置
+JWT_SECRET = os.getenv("JWT_SECRET", "change-this-secret-key-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "168"))  # 默认 7 天
+
+# 首次启动管理员配置
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")

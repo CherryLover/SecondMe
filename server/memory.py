@@ -35,14 +35,14 @@ def get_collection() -> chromadb.Collection:
     return _collection
 
 
-def store_memory_vector(memory_id: str, content: str, embedding: list[float], source: str):
+def store_memory_vector(memory_id: str, content: str, embedding: list[float], source: str, user_id: str):
     """存储记忆向量"""
     collection = get_collection()
     collection.add(
         ids=[memory_id],
         documents=[content],
         embeddings=[embedding],
-        metadatas=[{"source": source}]
+        metadatas=[{"source": source, "user_id": user_id}]
     )
 
 
@@ -65,14 +65,15 @@ def delete_memory_vector(memory_id: str):
         pass  # 向量可能不存在
 
 
-def search_memories(query_embedding: list[float], top_k: int = 5, exclude_ids: Optional[list[str]] = None) -> list[dict]:
-    """搜索相关记忆"""
+def search_memories(query_embedding: list[float], user_id: str, top_k: int = 5, exclude_ids: Optional[list[str]] = None) -> list[dict]:
+    """搜索用户的相关记忆"""
     collection = get_collection()
 
-    # 获取结果
+    # 获取结果，使用 where 过滤用户
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=top_k + (len(exclude_ids) if exclude_ids else 0)
+        n_results=top_k + (len(exclude_ids) if exclude_ids else 0),
+        where={"user_id": user_id}
     )
 
     # 格式化结果
