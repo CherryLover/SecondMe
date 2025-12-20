@@ -864,10 +864,11 @@ def get_flowmo_topic():
 @app.get("/api/flowmos", response_model=FlowmosResponse)
 def get_flowmos(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100)
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
 ):
     """获取 Flowmo 列表"""
-    flowmos, total = database.get_flowmos(page, page_size)
+    flowmos, total = database.get_flowmos(current_user["user_id"], page, page_size)
     return {
         "flowmos": flowmos,
         "total": total,
@@ -877,10 +878,10 @@ def get_flowmos(
 
 
 @app.post("/api/flowmos", response_model=FlowmoResponse)
-def create_flowmo(body: FlowmoCreate):
+def create_flowmo(body: FlowmoCreate, current_user: dict = Depends(get_current_user)):
     """直接添加 Flowmo（不经过对话）"""
     # 创建 Flowmo 记录
-    flowmo = database.create_flowmo(body.content, "direct")
+    flowmo = database.create_flowmo(current_user["user_id"], body.content, "direct")
 
     # 向量化存储
     settings = _get_settings()
@@ -900,9 +901,9 @@ def create_flowmo(body: FlowmoCreate):
 
 
 @app.delete("/api/flowmos/all")
-def delete_all_flowmos():
+def delete_all_flowmos(current_user: dict = Depends(get_current_user)):
     """删除所有 Flowmo"""
-    count, flowmo_ids = database.delete_all_flowmos()
+    count, flowmo_ids = database.delete_all_flowmos(current_user["user_id"])
 
     # 删除向量
     for flowmo_id in flowmo_ids:
@@ -913,8 +914,12 @@ def delete_all_flowmos():
 
 
 @app.delete("/api/flowmos/{flowmo_id}", response_model=SuccessResponse)
-def delete_flowmo(flowmo_id: str):
+def delete_flowmo(flowmo_id: str, current_user: dict = Depends(get_current_user)):
     """删除 Flowmo"""
+    # 验证所有权
+    if not database.verify_flowmo_owner(flowmo_id, current_user["user_id"]):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     # 删除向量
     memory.delete_flowmo_vector(flowmo_id)
 
