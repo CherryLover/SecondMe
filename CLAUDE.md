@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-SecondMe 是一个带有长期记忆能力的 AI 对话助手系统，专为个人单用户使用设计。
+SecondMe 是一个带有长期记忆能力的 AI 对话助手系统，支持多用户使用。
 
 ## 架构
 
@@ -32,19 +32,31 @@ AI 服务商 (OpenAI/DeepSeek/SiliconFlow等)
 ```
 SecondMe/
 ├── docs/                    # 项目文档
-│   ├── 00-版本记录.md
+│   ├── 需求池.md            # 需求收集和状态跟踪
+│   ├── 00-版本记录.md       # 版本列表（表格形式）
 │   ├── 01-项目概述.md
 │   ├── 02-功能清单.md
 │   ├── 03-技术架构.md
 │   ├── 04-API设计.md
 │   ├── 05-数据库设计.md
-│   └── 06-记忆系统设计.md
+│   ├── 06-记忆系统设计.md
+│   ├── 07-记忆提炼系统设计.md
+│   ├── 08-上下文消息限制.md
+│   ├── 09-Flowmo随想记录.md
+│   ├── 10-多用户系统设计.md
+│   └── versions/            # 各版本详情文档
+│       ├── v1.0.0.md
+│       ├── v1.1.0.md
+│       ├── v1.2.0.md
+│       └── v1.3.0.md
 ├── server/                  # Python 后端
 │   ├── main.py             # FastAPI 主程序，路由定义
 │   ├── config.py           # 配置管理（.env 加载）
 │   ├── database.py         # SQLite CRUD 操作
 │   ├── memory.py           # ChromaDB 向量操作
 │   ├── ai_client.py        # AI API 调用封装
+│   ├── auth.py             # JWT 认证模块
+│   ├── extraction.py       # 记忆提炼模块
 │   ├── models.py           # Pydantic 数据模型
 │   ├── logger.py           # 日志配置
 │   ├── requirements.txt    # Python 依赖
@@ -54,9 +66,11 @@ SecondMe/
 │       └── logs/           # 日志文件
 └── web/                     # 前端页面
     ├── index.html          # 主页面
+    ├── login.html          # 登录/注册页面
     ├── css/style.css       # 样式表
     └── js/
         ├── api.js          # API 请求封装
+        ├── auth.js         # 前端认证逻辑
         ├── app.js          # 主应用逻辑
         └── ui.js           # UI 渲染函数
 ```
@@ -65,14 +79,29 @@ SecondMe/
 
 | 表名 | 用途 |
 |------|------|
-| topics | 话题（id, title, created_at, updated_at） |
-| messages | 消息（id, topic_id, role, content, created_at） |
-| providers | 服务商（id, name, base_url, api_key, enabled） |
-| memories | 记忆（id, content, source, use_count, last_used_at） |
-| memory_usage | 记忆使用记录（memory_id, topic_id, message_id） |
-| settings | 配置（key, value） |
+| users | 用户（id, username, password_hash, role） |
+| invite_codes | 邀请码（id, code, max_uses, used_count） |
+| topics | 话题（id, user_id, title, is_flowmo） |
+| messages | 消息（id, topic_id, role, content） |
+| providers | 服务商（id, name, base_url, api_key）- 全局共享 |
+| memories | 记忆（id, user_id, content, memory_type） |
+| flowmos | Flowmo（id, user_id, content, source） |
+| settings | 配置（key, value）- 全局共享 |
 
 ## API 端点
+
+### 认证
+- `POST /api/auth/register` - 用户注册（需邀请码）
+- `POST /api/auth/login` - 用户登录
+- `GET /api/auth/me` - 获取当前用户信息
+- `PUT /api/auth/password` - 修改密码
+
+### 管理员
+- `POST /api/admin/invite-codes` - 创建邀请码
+- `GET /api/admin/invite-codes` - 邀请码列表
+- `DELETE /api/admin/invite-codes/{id}` - 删除邀请码
+- `GET /api/admin/users` - 用户列表
+- `DELETE /api/admin/users/{id}` - 删除用户
 
 ### 话题
 - `POST /api/topics` - 创建话题
@@ -86,7 +115,14 @@ SecondMe/
 - `POST /api/topics/{id}/messages` - 发送消息（同步）
 - `POST /api/topics/{id}/messages/stream` - 发送消息（流式）
 
-### 服务商
+### Flowmo
+- `GET /api/flowmo/topic` - 获取或创建 Flowmo 话题
+- `GET /api/flowmos` - Flowmo 列表
+- `POST /api/flowmos` - 直接添加 Flowmo
+- `DELETE /api/flowmos/{id}` - 删除 Flowmo
+- `DELETE /api/flowmos/all` - 删除全部 Flowmo
+
+### 服务商（管理员）
 - `POST /api/providers` - 添加服务商
 - `GET /api/providers` - 服务商列表
 - `PUT /api/providers/{id}` - 更新服务商
@@ -102,7 +138,7 @@ SecondMe/
 
 ### 配置
 - `GET /api/settings` - 获取配置
-- `PUT /api/settings` - 更新配置
+- `PUT /api/settings` - 更新配置（管理员）
 
 ## 记忆系统
 
@@ -151,54 +187,67 @@ DEFAULT_MEMORY_TOP_K=5
 
 ## 开发流程指引
 
-### 概述
+### 流程概览
 
-当用户提出新功能需求时，遵循以下流程，不要直接写代码。
+```
+需求收集 → 需求讨论 → 设计文档 → 用户确认 → 开发实现 → 测试验证 → 版本发布
+   ↓           ↓           ↓           ↓           ↓           ↓           ↓
+ 需求池     确认方案    XX-设计.md   审阅通过   逐项完成    自测通过   versions/
+```
+
+### 相关文档
+
+| 文档 | 用途 |
+|------|------|
+| `docs/需求池.md` | 收集和跟踪所有需求状态 |
+| `docs/XX-XXX设计.md` | 功能设计文档（编号递增） |
+| `docs/versions/vX.X.X.md` | 版本详情（功能清单、涉及文件） |
+| `docs/00-版本记录.md` | 版本列表（表格形式，倒序） |
 
 ### 流程步骤
 
-**1. 需求讨论**
+**1. 需求收集**
+- 用户提出需求想法
+- 记录到 `docs/需求池.md`，状态设为「💡 想法」
+- 简要描述背景和初步想法
+
+**2. 需求讨论**
 - 与用户讨论需求，理解问题背景和目标
 - 提出可行方案，分析利弊
-- 让用户确认最终方案
+- 用户确认最终方案后，状态改为「📋 待设计」
 
-**2. 编写设计文档**
-- 方案确认后，在 `docs/` 目录创建设计文档
-- 文档编号递增（如 `07-xxx.md`、`08-xxx.md`）
-- 内容包括：背景、方案、数据结构、代码示例、涉及文件
+**3. 编写设计文档**
+- 在 `docs/` 目录创建设计文档，编号递增
+- 内容包括：背景、方案、数据结构、API 设计、涉及文件
+- 需求池状态改为「📝 设计中」
 
-**3. 更新版本记录**
-- 在 `docs/00-版本记录.md` 添加新版本条目
-- 关联设计文档链接
+**4. 用户确认**
+- 设计文档完成后，让用户审阅
+- 用户确认后，创建 `docs/versions/vX.X.X.md` 版本详情文档
 - 列出功能清单（TODO List，用 `- [ ]` 格式）
-- 标注涉及的文件列表
+- 需求池状态改为「🚧 开发中」
 
-**4. 等待用户确认**
-- 文档完成后，让用户审阅
-- 用户确认后再进入开发阶段
-
-**5. 逐项开发**
-- 按版本记录中的 TODO List 顺序执行
+**5. 开发实现**
+- 按版本详情中的 TODO List 顺序执行
 - 每完成一项，将 `- [ ]` 改为 `- [x]`
 - 遇到问题与用户讨论
 
-**6. 用户自测**
-- 开发完成后，通知用户进行自测
+**6. 测试验证**
+- 开发完成后，编写测试脚本验证接口
+- 通知用户进行自测
 - 用户验证功能是否符合预期
 - 如有问题，修复后重新自测
-- 用户确认通过后才进入发布阶段
 
-**7. 完成发布**
-- 用户自测通过后，填写发布日志
-- 更新版本状态为已完成
-- 提交代码：`git add . && git commit`
-- 提交文档：确保 docs/ 目录的变更也已提交
-- 打版本标签：`git tag vX.X.X && git push origin vX.X.X`
+**7. 版本发布**
+- 用户自测通过后：
+  - 更新 `docs/00-版本记录.md` 添加版本条目
+  - 需求池状态改为「✅ 已完成」，关联版本号
+  - 提交代码：`git add . && git commit`
+  - 打版本标签：`git tag vX.X.X`
 
 ### 注意事项
 
-- 不要跳过讨论和文档阶段直接写代码
-- 设计文档是开发的依据，先写文档再写代码
-- 版本记录的 TODO List 是任务清单，按顺序执行
-- 每个阶段完成后与用户确认再继续
-- 发布前必须经过用户自测确认
+- **不要跳过流程直接写代码**：先需求池 → 再设计 → 再开发
+- **设计文档是开发依据**：先写文档再写代码
+- **每个阶段与用户确认**：避免返工
+- **发布前必须自测**：确保功能符合预期
