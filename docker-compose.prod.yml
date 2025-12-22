@@ -1,0 +1,25 @@
+# SecondMe 生产环境 Docker Compose 配置
+# 部署目录: /root/docker-container/secondme/
+
+services:
+  server:
+    image: ghcr.io/cherrylover/secondme-server:latest
+    container_name: secondme-server
+    restart: unless-stopped
+    ports:
+      - "8060:8060"
+    volumes:
+      # 数据持久化（SQLite + ChromaDB）
+      - ./data:/app/data
+      # 日志
+      - ./logs:/app/data/logs
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8060/api/settings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
