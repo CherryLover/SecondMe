@@ -849,9 +849,9 @@ def update_settings(body: SettingsUpdate, current_user: dict = Depends(require_a
 # ==================== Flowmo ====================
 
 @app.get("/api/flowmo/topic", response_model=FlowmoTopicResponse)
-def get_flowmo_topic():
+def get_flowmo_topic(current_user: dict = Depends(get_current_user)):
     """获取或创建 Flowmo 话题"""
-    topic = database.get_or_create_flowmo_topic()
+    topic = database.get_or_create_flowmo_topic(current_user["user_id"])
     return {
         "id": topic["id"],
         "title": topic["title"],
@@ -1064,23 +1064,35 @@ FLOWMO_SYSTEM_PROMPT = """你是一个善于倾听的伙伴。用户在记录自
 
 # Web 目录路径
 WEB_DIR = Path(__file__).parent.parent / "web"
+DIST_DIR = WEB_DIR / "dist"
 
+# 检查是否为生产模式（dist 目录存在）
+IS_PRODUCTION = DIST_DIR.exists() and (DIST_DIR / "index.html").exists()
 
-@app.get("/login.html")
-async def login_page():
-    """登录页面"""
-    return FileResponse(WEB_DIR / "login.html")
+if IS_PRODUCTION:
+    # 生产模式：服务 React 构建后的静态文件
+    logger.info("生产模式：托管 React 构建文件")
 
+    # 挂载静态资源
+    app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 
-@app.get("/")
-async def index_page():
-    """主页面"""
-    return FileResponse(WEB_DIR / "index.html")
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """SPA 路由 - 所有非 API 路由返回 index.html"""
+        # 如果是 API 路由，跳过
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
 
+        # 检查是否请求静态文件
+        file_path = DIST_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
 
-# 挂载静态资源（CSS、JS）
-app.mount("/css", StaticFiles(directory=WEB_DIR / "css"), name="css")
-app.mount("/js", StaticFiles(directory=WEB_DIR / "js"), name="js")
+        # 其他所有请求返回 index.html（SPA 路由）
+        return FileResponse(DIST_DIR / "index.html")
+else:
+    # 开发模式：前端由 Vite 开发服务器处理
+    logger.info("开发模式：前端请访问 http://localhost:5173")
 
 
 if __name__ == "__main__":
