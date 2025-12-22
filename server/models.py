@@ -3,6 +3,67 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+# ==================== Auth ====================
+
+class UserRegister(BaseModel):
+    username: str
+    password: str
+    invite_code: str
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+    created_at: str
+    last_login_at: Optional[str] = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class PasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
+
+# ==================== Invite Code ====================
+
+class InviteCodeCreate(BaseModel):
+    max_uses: int = 1
+    expires_days: Optional[int] = None
+
+
+class InviteCodeResponse(BaseModel):
+    id: str
+    code: str
+    max_uses: int
+    used_count: int
+    expires_at: Optional[str] = None
+    created_at: str
+
+
+class InviteCodesResponse(BaseModel):
+    invite_codes: list[InviteCodeResponse]
+
+
+# ==================== User Management ====================
+
+class UsersResponse(BaseModel):
+    users: list[UserResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 # ==================== Topic ====================
 
 class TopicCreate(BaseModel):
@@ -107,6 +168,7 @@ class MemoryResponse(BaseModel):
     use_count: int
     created_at: str
     last_used_at: Optional[str]
+    memory_type: Optional[str] = "chat"
 
 
 class MemoryUsageRecord(BaseModel):
@@ -127,6 +189,36 @@ class MemoriesResponse(BaseModel):
     page_size: int
 
 
+# ==================== Flowmo ====================
+
+class FlowmoCreate(BaseModel):
+    content: str
+
+
+class FlowmoResponse(BaseModel):
+    id: str
+    content: str
+    source: str
+    topic_id: Optional[str]
+    message_id: Optional[str]
+    created_at: str
+
+
+class FlowmosResponse(BaseModel):
+    flowmos: list[FlowmoResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class FlowmoTopicResponse(BaseModel):
+    id: str
+    title: str
+    is_flowmo: bool
+    created_at: str
+    updated_at: str
+
+
 # ==================== Settings ====================
 
 class SettingsResponse(BaseModel):
@@ -135,6 +227,9 @@ class SettingsResponse(BaseModel):
     embedding_provider_id: Optional[str] = None
     embedding_model: Optional[str] = None
     memory_top_k: int = 5
+    memory_silent_minutes: int = 2
+    memory_extraction_enabled: bool = True
+    memory_context_messages: int = 6
 
 
 class SettingsUpdate(BaseModel):
@@ -143,6 +238,9 @@ class SettingsUpdate(BaseModel):
     embedding_provider_id: Optional[str] = None
     embedding_model: Optional[str] = None
     memory_top_k: Optional[int] = None
+    memory_silent_minutes: Optional[int] = None
+    memory_extraction_enabled: Optional[bool] = None
+    memory_context_messages: Optional[int] = None
 
 
 # ==================== Common ====================

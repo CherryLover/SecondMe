@@ -34,3 +34,23 @@ DEFAULT_EMBEDDING_MODEL = os.getenv("DEFAULT_EMBEDDING_MODEL")
 
 # 记忆配置
 DEFAULT_MEMORY_TOP_K = int(os.getenv("DEFAULT_MEMORY_TOP_K", "5"))
+
+# 记忆提炼配置
+DEFAULT_MEMORY_SILENT_MINUTES = int(os.getenv("DEFAULT_MEMORY_SILENT_MINUTES", "2"))
+DEFAULT_MEMORY_EXTRACTION_ENABLED = os.getenv("DEFAULT_MEMORY_EXTRACTION_ENABLED", "true").lower() == "true"
+DEFAULT_MEMORY_CONTEXT_MESSAGES = int(os.getenv("DEFAULT_MEMORY_CONTEXT_MESSAGES", "6"))
+
+# 上下文消息限制
+MAX_CONTEXT_MESSAGES = int(os.getenv("MAX_CONTEXT_MESSAGES", "100"))
+
+# Flowmo 配置
+FLOWMO_INTERVAL_MINUTES = int(os.getenv("FLOWMO_INTERVAL_MINUTES", "5"))
+
+# JWT 配置
+JWT_SECRET = os.getenv("JWT_SECRET", "change-this-secret-key-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "168"))  # 默认 7 天
+
+# 首次启动管理员配置
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
