@@ -82,6 +82,18 @@
     }
   }
 
+  /* Fade-in blocks */
+  .fade-enter {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 1.2s ease-out, transform 1.2s ease-out;
+  }
+
+  .fade-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   /* Typing indicator */
   .typing-dot {
     animation: typing 1.4s infinite ease-in-out both;

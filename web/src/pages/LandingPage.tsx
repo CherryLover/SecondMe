@@ -128,6 +128,11 @@ export default function LandingPage() {
 
         {/* Section 1: Origin */}
         <section className="py-20 md:py-32 border-t border-muted/10 dark:border-white/5 relative">
+          <div className="absolute -left-4 md:-left-12 top-40 w-12 h-24 pointer-events-none opacity-30 dark:opacity-20">
+            <svg viewBox="0 0 50 100" fill="none" stroke="currentColor" className="text-muted dark:text-darkAccent" strokeWidth="1.5">
+              <path d="M10,10 C30,20 0,30 20,40 C40,50 10,60 30,70 C50,80 20,90 20,90" strokeLinecap="round" />
+            </svg>
+          </div>
           <FadeIn>
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12">
               <div className="md:col-span-4 text-accent dark:text-darkAccent font-serif text-xs md:text-sm tracking-widest uppercase mt-2 opacity-60">
@@ -171,6 +176,11 @@ export default function LandingPage() {
                   </div>
 
                   <div className="space-y-4 relative">
+                    <svg className="absolute -top-4 -left-4 w-[120%] h-[120%] pointer-events-none opacity-10 dark:opacity-10 text-accent dark:text-darkAccent" viewBox="0 0 200 150" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20,10 C50,-10 180,10 190,50 C200,100 150,140 50,130 C-10,120 10,30 20,10" strokeLinecap="round" strokeDasharray="300 300">
+                        <animate attributeName="stroke-dashoffset" from="300" to="0" dur="2s" fill="freeze" />
+                      </path>
+                    </svg>
                     <h3 className="font-serif text-sm md:text-lg text-accent dark:text-darkAccent border-b border-muted/20 dark:border-white/10 pb-2 uppercase tracking-widest">{define.isThis}</h3>
                     <ul className="space-y-3 text-ink dark:text-darkInk font-normal text-sm md:text-base">
                       {defineIsList.map((item, i) => (
@@ -286,6 +296,12 @@ export default function LandingPage() {
 
         {/* Footer */}
         <footer className="py-24 md:py-32 mt-12 border-t border-muted/10 dark:border-white/5 text-center relative overflow-hidden">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none opacity-5 dark:opacity-5">
+            <svg viewBox="0 0 400 200" preserveAspectRatio="none" className="w-full h-full">
+              <path d="M0,200 C100,150 300,150 400,200" fill="none" stroke="currentColor" strokeWidth="1" className="text-ink dark:text-white" />
+              <path d="M0,200 C100,100 300,100 400,200" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-ink dark:text-white" />
+            </svg>
+          </div>
           <FadeIn>
             <h2
               className="font-serif text-2xl md:text-4xl text-ink dark:text-darkInk mb-6 md:mb-8 leading-relaxed"
