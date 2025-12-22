@@ -1,0 +1,117 @@
+name: Release and Create PR
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get_tag.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag name
+        id: get_tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${{ steps.get_tag.outputs.tag }}$" | tail -1)
+          echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          TAG=${{ steps.get_tag.outputs.tag }}
+          PREV_TAG=${{ steps.prev_tag.outputs.prev_tag }}
+
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..${TAG} | grep -v "Merge")
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s" -20 | grep -v "Merge")
+          fi
+
+          # 写入文件避免多行问题
+          echo "$CHANGELOG" > changelog.txt
+          echo "Generated changelog for $TAG"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: Release ${{ steps.get_tag.outputs.tag }}
+          body_path: changelog.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-pr:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ needs.release.outputs.tag_name }}
+
+          # 检查是否已存在 PR
+          EXISTING_PR=$(gh pr list --base main --head dev --json number --jq '.[0].number')
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists, updating..."
+            gh pr edit $EXISTING_PR --title "Release ${TAG}" --body "## Release ${TAG}
+
+          Automated PR for release ${TAG}.
+
+          ### Checklist
+          - [ ] CI checks passed
+          - [ ] Ready to merge
+
+          ---
+          🤖 This PR was automatically created by the release workflow."
+          else
+            echo "Creating new PR..."
+            gh pr create \
+              --base main \
+              --head dev \
+              --title "Release ${TAG}" \
+              --body "## Release ${TAG}
+
+          Automated PR for release ${TAG}.
+
+          ### Checklist
+          - [ ] CI checks passed
+          - [ ] Ready to merge
+
+          ---
+          🤖 This PR was automatically created by the release workflow."
+          fi
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --base main --head dev --json number --jq '.[0].number')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr merge $PR_NUMBER --auto --squash || echo "Auto-merge not enabled or not available"
+          fi
