@@ -89,8 +89,17 @@ jobs:
           script: |
             cd ${{ env.DEPLOY_PATH }}
 
+            # 调试：显示当前目录和文件
+            echo "=== Current directory ==="
+            pwd
+            ls -la
+
             # 重命名 compose 文件
             mv -f docker-compose.prod.yml docker-compose.yml 2>/dev/null || true
+
+            # 调试：显示 docker-compose.yml 内容
+            echo "=== docker-compose.yml ==="
+            cat docker-compose.yml
 
             # 登录 GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -98,14 +107,22 @@ jobs:
             # 拉取最新镜像
             docker compose pull
 
-            # 重启服务
-            docker compose up -d
+            # 重启服务（显示详细输出）
+            docker compose up -d --force-recreate 2>&1
+
+            # 等待容器启动
+            sleep 5
+
+            # 显示状态
+            echo "=== Container status ==="
+            docker compose ps -a
+
+            # 显示日志（如果容器启动失败）
+            echo "=== Container logs ==="
+            docker compose logs --tail=50 || true
 
             # 清理旧镜像
             docker image prune -f
-
-            # 显示状态
-            docker compose ps
 
       - name: Health check
         uses: appleboy/ssh-action@v1.0.3
