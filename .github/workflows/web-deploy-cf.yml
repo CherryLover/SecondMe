@@ -1,12 +1,12 @@
-name: Deploy Web to Cloudflare Pages
+name: web-deploy-cf
 
 on:
   push:
     branches:
-      - dev
+      - main
     paths:
       - web/**
-      - .github/workflows/deploy-cloudflare.yml
+      - .github/workflows/web-deploy-cf.yml
   workflow_dispatch:
 
 permissions:
