@@ -1,24 +1,37 @@
 import { Link } from 'react-router-dom'
 
+const ICON_SRC = '/secondme-icon.svg'
+
 interface LogoProps {
   className?: string
   linkTo?: string
   size?: 'sm' | 'md' | 'lg'
 }
 
-const sizeClasses = {
+const textSizeClasses = {
   sm: 'text-lg',
   md: 'text-xl md:text-2xl',
   lg: 'text-2xl md:text-3xl',
+}
+
+const iconSizeClasses = {
+  sm: 'w-6 h-6',
+  md: 'w-8 h-8',
+  lg: 'w-10 h-10',
 }
 
 export function Logo({ className = '', linkTo = '/', size = 'md' }: LogoProps) {
   return (
     <Link
       to={linkTo}
-      className={`font-serif ${sizeClasses[size]} font-semibold text-ink dark:text-darkInk hover:text-accent dark:hover:text-darkAccent transition-colors duration-300 ${className}`}
+      className={`inline-flex items-center gap-3 font-serif font-semibold text-ink dark:text-darkInk hover:text-accent dark:hover:text-darkAccent transition-colors duration-300 ${textSizeClasses[size]} ${className}`}
     >
-      SecondMe
+      <img
+        src={ICON_SRC}
+        alt="SecondMe 图标"
+        className={`shrink-0 drop-shadow-sm ${iconSizeClasses[size]}`}
+      />
+      <span>SecondMe</span>
     </Link>
   )
 }

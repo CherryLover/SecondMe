@@ -1,0 +1,27 @@
+<svg width="512" height="512" viewBox="64 64 384 384" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    :root { color-scheme: light dark; }
+    svg { color: #7f7f7f; }
+    path { stroke: currentColor; }
+    @media (prefers-color-scheme: dark) {
+      svg { color: #e6e6e6; }
+    }
+  </style>
+  <path
+    d="
+      M 260 120
+      C 350 120, 410 200, 398 280
+      C 386 360, 300 412, 232 388
+      C 164 364, 124 296, 150 230
+      C 176 166, 242 134, 302 146
+      C 360 158, 412 238, 382 318
+      C 352 398, 268 430, 204 404
+      C 140 378, 124 302, 162 242
+      C 200 182, 258 172, 298 190
+    "
+    fill="none"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
