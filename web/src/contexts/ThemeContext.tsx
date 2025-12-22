@@ -15,7 +15,7 @@ const THEME_KEY = 'secondme_theme'
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('light')
 
-  // 初始化主题
+  // Initialize theme
   useEffect(() => {
     const savedTheme = localStorage.getItem(THEME_KEY) as Theme | null
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -23,7 +23,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light')
     setThemeState(initialTheme)
 
-    // 应用主题到 document
+    // Apply theme class on document
     if (initialTheme === 'dark') {
       document.documentElement.classList.add('dark')
     } else {

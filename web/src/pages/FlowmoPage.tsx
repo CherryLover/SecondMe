@@ -6,10 +6,12 @@ import type { Flowmo } from '@/types'
 import { FlowmoList } from '@/components/flowmo/FlowmoList'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Plus, Sparkles, Trash2, MessageCircle } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 export default function FlowmoPage() {
   const navigate = useNavigate()
   const { user, isLoading: authLoading } = useAuth()
+  const { t } = useI18n()
   const [flowmos, setFlowmos] = useState<Flowmo[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -34,7 +36,7 @@ export default function FlowmoPage() {
       const data = await api.getFlowmos(1, 100)
       setFlowmos(data.flowmos)
     } catch (error) {
-      console.error('加载 Flowmo 失败:', error)
+      console.error('Failed to load Flowmo:', error)
     } finally {
       setLoading(false)
     }
@@ -45,20 +47,20 @@ export default function FlowmoPage() {
       await api.deleteFlowmo(id)
       setFlowmos(flowmos.filter((f) => f.id !== id))
     } catch (error) {
-      console.error('删除失败:', error)
-      alert('删除失败')
+      console.error('Failed to delete Flowmo note:', error)
+      alert(t('flowmo.alerts.deleteFailed'))
     }
   }
 
   const handleDeleteAll = async () => {
-    if (!confirm('确定要删除所有随想吗？此操作不可恢复！')) return
+    if (!confirm(t('flowmo.confirmations.deleteAll'))) return
     try {
       const result = await api.deleteAllFlowmos()
       setFlowmos([])
-      alert(`已删除 ${result.deleted_count} 条随想`)
+      alert(t('flowmo.alerts.deleteAllSuccess', { count: result.deleted_count }))
     } catch (error) {
-      console.error('删除所有 Flowmo 失败:', error)
-      alert('删除失败')
+      console.error('Failed to delete all Flowmo notes:', error)
+      alert(t('flowmo.alerts.deleteFailed'))
     }
   }
 
@@ -71,8 +73,8 @@ export default function FlowmoPage() {
       setNewContent('')
       setShowAddForm(false)
     } catch (error) {
-      console.error('添加失败:', error)
-      alert('添加失败')
+      console.error('Failed to add Flowmo note:', error)
+      alert(t('flowmo.alerts.addFailed'))
     } finally {
       setAdding(false)
     }
@@ -83,14 +85,14 @@ export default function FlowmoPage() {
       const topic = await api.getFlowmoTopic()
       navigate(`/app?topic=${topic.id}`)
     } catch (error) {
-      console.error('获取 Flowmo 话题失败:', error)
+      console.error('Failed to fetch Flowmo topic:', error)
     }
   }
 
   if (authLoading) {
     return (
       <div className="min-h-screen bg-paper dark:bg-darkPaper flex items-center justify-center">
-        <div className="text-subInk dark:text-darkSubInk">加载中...</div>
+        <div className="text-subInk dark:text-darkSubInk">{t('common.loading')}</div>
       </div>
     )
   }
@@ -121,15 +123,15 @@ export default function FlowmoPage() {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={handleGoToFlowmoChat}>
               <MessageCircle className="w-4 h-4 mr-1" />
-              对话
+              {t('flowmo.buttons.conversation')}
             </Button>
             <Button variant="ghost" size="sm" onClick={handleDeleteAll} disabled={flowmos.length === 0}>
               <Trash2 className="w-4 h-4 mr-1" />
-              清空
+              {t('flowmo.buttons.clear')}
             </Button>
             <Button size="sm" onClick={() => setShowAddForm(!showAddForm)}>
               <Plus className="w-4 h-4 mr-1" />
-              添加
+              {t('flowmo.buttons.add')}
             </Button>
           </div>
         </div>
@@ -142,17 +144,17 @@ export default function FlowmoPage() {
             <textarea
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
-              placeholder="写下你的想法..."
+              placeholder={t('flowmo.placeholders.idea')}
               rows={3}
               className="w-full bg-transparent text-ink dark:text-darkInk placeholder:text-muted dark:placeholder:text-muted/60 outline-none resize-none"
               autoFocus
             />
             <div className="flex justify-end gap-2 mt-3">
               <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
-                取消
+                {t('flowmo.actions.cancel')}
               </Button>
               <Button size="sm" onClick={handleAdd} disabled={!newContent.trim() || adding}>
-                {adding ? '添加中...' : '添加'}
+                {adding ? t('flowmo.actions.adding') : t('flowmo.buttons.add')}
               </Button>
             </div>
           </div>
@@ -162,7 +164,7 @@ export default function FlowmoPage() {
       {/* Info */}
       <div className="max-w-4xl mx-auto px-4 py-4">
         <p className="text-sm text-subInk dark:text-darkSubInk">
-          Flowmo 是你的随想记录空间。在 Flowmo 对话中，你的每条消息都会被自动保存为随想。
+          {t('flowmo.description')}
         </p>
       </div>
 
@@ -170,7 +172,7 @@ export default function FlowmoPage() {
       <main className="max-w-4xl mx-auto px-4 pb-8">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="text-subInk dark:text-darkSubInk">加载中...</div>
+            <div className="text-subInk dark:text-darkSubInk">{t('common.loading')}</div>
           </div>
         ) : (
           <FlowmoList flowmos={flowmos} onDelete={handleDelete} />

@@ -1,4 +1,4 @@
-// 用户
+// User
 export interface User {
   id: string
   username: string
@@ -6,7 +6,7 @@ export interface User {
   created_at: string
 }
 
-// 话题
+// Topic
 export interface Topic {
   id: string
   title: string
@@ -15,7 +15,7 @@ export interface Topic {
   updated_at: string
 }
 
-// 消息
+// Message
 export interface Message {
   id: string
   topic_id: string
@@ -24,16 +24,16 @@ export interface Message {
   created_at: string
 }
 
-// 记忆类型
+// Memory type
 export type MemoryType = 'personal' | 'preference' | 'fact' | 'plan' | 'manual' | 'chat'
 
-// 记忆使用记录
+// Memory usage record
 export interface MemoryUsageRecord {
   topic_title: string
   used_at: string
 }
 
-// 记忆
+// Memory
 export interface Memory {
   id: string
   content: string
@@ -53,7 +53,7 @@ export interface Flowmo {
   created_at: string
 }
 
-// 服务商
+// Provider
 export interface Provider {
   id: string
   name: string
@@ -61,7 +61,7 @@ export interface Provider {
   enabled: boolean
 }
 
-// 服务商输入
+// Provider input
 export interface ProviderInput {
   name: string
   base_url: string
@@ -69,7 +69,7 @@ export interface ProviderInput {
   enabled: boolean
 }
 
-// 设置
+// Settings
 export interface Settings {
   default_chat_provider_id: string | null
   default_chat_model: string | null
@@ -81,7 +81,7 @@ export interface Settings {
   memory_context_messages: number
 }
 
-// 邀请码
+// Invite code
 export interface InviteCode {
   id: string
   code: string
@@ -91,7 +91,7 @@ export interface InviteCode {
   created_at: string
 }
 
-// 流式响应完成数据
+// Stream completion data
 export interface StreamDoneData {
   type: 'done'
   message_id: string
@@ -101,13 +101,13 @@ export interface StreamDoneData {
   topic_title_updated?: boolean
 }
 
-// 认证响应
+// Auth response
 export interface AuthResponse {
   access_token: string
   user: User
 }
 
-// API 响应类型
+// API response helpers
 export interface TopicsResponse {
   topics: Topic[]
 }

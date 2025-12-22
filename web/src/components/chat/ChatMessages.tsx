@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Message } from '@/types'
 import { User, Bot } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface ChatMessagesProps {
   messages: Message[]
@@ -14,25 +15,26 @@ export function ChatMessages({
   isStreaming,
 }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { t, language } = useI18n()
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
   const formatContent = (content: string) => {
-    // 简单的 markdown 处理：代码块、加粗、斜体
+    // Basic markdown transforms: code blocks, bold, italics
     let html = content
-      // 代码块
+      // Code blocks
       .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
-      // 行内代码
+      // Inline code
       .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-      // 加粗
+      // Bold
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      // 斜体
+      // Italic
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // 链接
+      // Links
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" class="text-accent dark:text-darkAccent hover:underline">$1</a>')
-      // 换行
+      // Line breaks
       .replace(/\n/g, '<br />')
 
     return html
@@ -46,10 +48,10 @@ export function ChatMessages({
             <Bot className="w-8 h-8 text-accent dark:text-darkAccent" />
           </div>
           <h2 className="text-xl font-serif text-ink dark:text-darkInk mb-3">
-            开始新对话
+            {t('chat.emptyState.title')}
           </h2>
           <p className="text-subInk dark:text-darkSubInk text-sm leading-relaxed">
-            写下你想说的话，我会记住我们之间的每一次对话。
+            {t('chat.emptyState.description')}
           </p>
         </div>
       </div>
@@ -91,10 +93,13 @@ export function ChatMessages({
                     : 'text-muted dark:text-muted/60'
                 }`}
               >
-                {new Date(message.created_at).toLocaleTimeString('zh-CN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                {new Date(message.created_at).toLocaleTimeString(
+                  language === 'zh' ? 'zh-CN' : 'en-US',
+                  {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }
+                )}
               </div>
             </div>
             {message.role === 'user' && (

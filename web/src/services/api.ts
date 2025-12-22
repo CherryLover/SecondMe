@@ -18,6 +18,7 @@ import type {
   DeleteCountResponse,
   StreamDoneData,
 } from '@/types'
+import { t } from '@/i18n'
 
 const API_BASE = '/api'
 const TOKEN_KEY = 'secondme_token'
@@ -43,7 +44,7 @@ class ApiService {
     const newToken = response.headers.get('X-New-Token')
     if (newToken) {
       localStorage.setItem(TOKEN_KEY, newToken)
-      console.log('Token 已自动刷新')
+      console.log(t('common.errors.tokenRefresh'))
     }
   }
 
@@ -54,12 +55,12 @@ class ApiService {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem('secondme_user')
       window.location.href = '/login'
-      throw new Error('认证已过期，请重新登录')
+      throw new Error(t('common.errors.authExpired'))
     }
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}))
-      throw new Error(data.detail || `请求失败: ${response.status}`)
+      throw new Error(data.detail || t('common.errors.requestFailed', { status: response.status }))
     }
 
     return response.json()
@@ -175,12 +176,12 @@ class ApiService {
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem('secondme_user')
         window.location.href = '/login'
-        onError('认证已过期，请重新登录')
+        onError(t('common.errors.authExpired'))
         return
       }
 
       if (!response.body) {
-        onError('无法获取响应流')
+        onError(t('common.errors.streamFailed'))
         return
       }
 
@@ -206,13 +207,13 @@ class ApiService {
                 onError(data.message)
               }
             } catch {
-              // 解析失败，忽略
+              // Ignore parsing errors
             }
           }
         }
       }
     } catch (error) {
-      onError(error instanceof Error ? error.message : '发送失败')
+      onError(error instanceof Error ? error.message : t('common.errors.sendFailed'))
     }
   }
 

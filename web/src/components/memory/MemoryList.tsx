@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Memory } from '@/types'
 import { Brain, Trash2, Edit3, Eye, Clock, Hash } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface MemoryListProps {
   memories: Memory[]
@@ -9,13 +10,13 @@ interface MemoryListProps {
   onDelete: (id: string) => void
 }
 
-const memoryTypeLabels: Record<string, string> = {
-  personal: '个人信息',
-  preference: '偏好',
-  fact: '事实',
-  plan: '计划',
-  manual: '手动添加',
-  chat: '对话提取',
+const memoryTypeLabelKeys: Record<string, string> = {
+  personal: 'memory.list.types.personal',
+  preference: 'memory.list.types.preference',
+  fact: 'memory.list.types.fact',
+  plan: 'memory.list.types.plan',
+  manual: 'memory.list.types.manual',
+  chat: 'memory.list.types.chat',
 }
 
 const memoryTypeColors: Record<string, string> = {
@@ -29,9 +30,10 @@ const memoryTypeColors: Record<string, string> = {
 
 export function MemoryList({ memories, onView, onEdit, onDelete }: MemoryListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { t, language } = useI18n()
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除这条记忆吗？')) return
+    if (!confirm(t('memory.confirmations.deleteOne'))) return
     setDeletingId(id)
     try {
       await onDelete(id)
@@ -41,7 +43,7 @@ export function MemoryList({ memories, onView, onEdit, onDelete }: MemoryListPro
   }
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('zh-CN', {
+    return new Date(dateStr).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -55,10 +57,10 @@ export function MemoryList({ memories, onView, onEdit, onDelete }: MemoryListPro
           <Brain className="w-8 h-8 text-accent dark:text-darkAccent" />
         </div>
         <h3 className="text-lg font-serif text-ink dark:text-darkInk mb-2">
-          暂无记忆
+          {t('memory.empty.title')}
         </h3>
         <p className="text-subInk dark:text-darkSubInk text-sm max-w-xs">
-          记忆会在对话中自动提取，你也可以手动添加重要信息
+          {t('memory.empty.desc')}
         </p>
       </div>
     )
@@ -73,22 +75,24 @@ export function MemoryList({ memories, onView, onEdit, onDelete }: MemoryListPro
         >
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              {/* 类型标签 */}
+              {/* Type badges */}
               <div className="flex items-center gap-2 mb-2">
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${memoryTypeColors[memory.memory_type] || memoryTypeColors.chat}`}>
-                  {memoryTypeLabels[memory.memory_type] || memory.memory_type}
+                  {memoryTypeLabelKeys[memory.memory_type]
+                    ? t(memoryTypeLabelKeys[memory.memory_type])
+                    : memory.memory_type}
                 </span>
                 {memory.source === 'manual' && (
-                  <span className="text-xs text-muted dark:text-muted/60">手动</span>
+                  <span className="text-xs text-muted dark:text-muted/60">{t('common.labels.manual')}</span>
                 )}
               </div>
 
-              {/* 内容 */}
+              {/* Content */}
               <p className="text-ink dark:text-darkInk text-sm leading-relaxed line-clamp-3">
                 {memory.content}
               </p>
 
-              {/* 元信息 */}
+              {/* Metadata */}
               <div className="flex items-center gap-4 mt-3 text-xs text-muted dark:text-muted/60">
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
@@ -96,24 +100,24 @@ export function MemoryList({ memories, onView, onEdit, onDelete }: MemoryListPro
                 </span>
                 <span className="flex items-center gap-1">
                   <Hash className="w-3 h-3" />
-                  使用 {memory.use_count} 次
+                  {t('memory.list.useCount', { count: memory.use_count })}
                 </span>
               </div>
             </div>
 
-            {/* 操作按钮 */}
+            {/* Actions */}
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={() => onView(memory)}
                 className="p-2 rounded-lg hover:bg-muted/10 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk"
-                title="查看详情"
+                title={t('memory.list.view')}
               >
                 <Eye className="w-4 h-4" />
               </button>
               <button
                 onClick={() => onEdit(memory)}
                 className="p-2 rounded-lg hover:bg-muted/10 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk"
-                title="编辑"
+                title={t('memory.list.edit')}
               >
                 <Edit3 className="w-4 h-4" />
               </button>
@@ -121,7 +125,7 @@ export function MemoryList({ memories, onView, onEdit, onDelete }: MemoryListPro
                 onClick={() => handleDelete(memory.id)}
                 disabled={deletingId === memory.id}
                 className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 dark:text-red-400 disabled:opacity-50"
-                title="删除"
+                title={t('memory.list.delete')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Flowmo } from '@/types'
 import { Sparkles, Trash2, MessageCircle } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface FlowmoListProps {
   flowmos: Flowmo[]
@@ -9,9 +10,10 @@ interface FlowmoListProps {
 
 export function FlowmoList({ flowmos, onDelete }: FlowmoListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { t, language } = useI18n()
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除这条随想吗？')) return
+    if (!confirm(t('flowmo.confirmations.deleteOne'))) return
     setDeletingId(id)
     try {
       await onDelete(id)
@@ -28,12 +30,12 @@ export function FlowmoList({ flowmos, onDelete }: FlowmoListProps) {
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
 
-    if (diffMins < 1) return '刚刚'
-    if (diffMins < 60) return `${diffMins} 分钟前`
-    if (diffHours < 24) return `${diffHours} 小时前`
-    if (diffDays < 7) return `${diffDays} 天前`
+    if (diffMins < 1) return t('common.time.justNow')
+    if (diffMins < 60) return t('common.time.minutesAgo', { count: diffMins })
+    if (diffHours < 24) return t('common.time.hoursAgo', { count: diffHours })
+    if (diffDays < 7) return t('common.time.daysAgo', { count: diffDays })
 
-    return date.toLocaleDateString('zh-CN', {
+    return date.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
       month: 'short',
       day: 'numeric',
     })
@@ -46,10 +48,10 @@ export function FlowmoList({ flowmos, onDelete }: FlowmoListProps) {
           <Sparkles className="w-8 h-8 text-accent dark:text-darkAccent" />
         </div>
         <h3 className="text-lg font-serif text-ink dark:text-darkInk mb-2">
-          暂无随想
+          {t('flowmo.list.emptyTitle')}
         </h3>
         <p className="text-subInk dark:text-darkSubInk text-sm max-w-xs">
-          在 Flowmo 对话中记录的想法会自动出现在这里
+          {t('flowmo.list.emptyDesc')}
         </p>
       </div>
     )
@@ -81,7 +83,7 @@ export function FlowmoList({ flowmos, onDelete }: FlowmoListProps) {
                 </span>
                 {flowmo.source === 'chat' && (
                   <span className="text-xs text-accent dark:text-darkAccent">
-                    来自对话
+                    {t('flowmo.list.fromChat')}
                   </span>
                 )}
               </div>
@@ -91,7 +93,7 @@ export function FlowmoList({ flowmos, onDelete }: FlowmoListProps) {
               onClick={() => handleDelete(flowmo.id)}
               disabled={deletingId === flowmo.id}
               className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 dark:text-red-400 disabled:opacity-50 transition-opacity"
-              title="删除"
+              title={t('flowmo.list.delete')}
             >
               <Trash2 className="w-4 h-4" />
             </button>

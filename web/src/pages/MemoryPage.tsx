@@ -7,17 +7,20 @@ import { MemoryList } from '@/components/memory/MemoryList'
 import { MemoryModal } from '@/components/memory/MemoryModal'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Plus, Brain, Trash2, Filter } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 type ModalMode = 'view' | 'edit' | 'add' | null
 
 export default function MemoryPage() {
   const navigate = useNavigate()
   const { user, isLoading: authLoading } = useAuth()
+  const { t } = useI18n()
   const [memories, setMemories] = useState<Memory[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState<'all' | 'chat' | 'manual'>('all')
+  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null)
@@ -42,7 +45,7 @@ export default function MemoryPage() {
       setMemories(data.memories)
       setTotal(data.total)
     } catch (error) {
-      console.error('加载记忆失败:', error)
+      console.error('Failed to load memories:', error)
     } finally {
       setLoading(false)
     }
@@ -69,21 +72,21 @@ export default function MemoryPage() {
       setMemories(memories.filter((m) => m.id !== id))
       setTotal(total - 1)
     } catch (error) {
-      console.error('删除记忆失败:', error)
-      alert('删除失败')
+      console.error('Failed to delete memory:', error)
+      alert(t('memory.alerts.deleteFailed'))
     }
   }
 
   const handleDeleteAll = async () => {
-    if (!confirm('确定要删除所有记忆吗？此操作不可恢复！')) return
+    if (!confirm(t('memory.confirmations.deleteAll'))) return
     try {
       const result = await api.deleteAllMemories()
       setMemories([])
       setTotal(0)
-      alert(`已删除 ${result.deleted_count} 条记忆`)
+      alert(t('memory.alerts.deleteAllSuccess', { count: result.deleted_count }))
     } catch (error) {
-      console.error('删除所有记忆失败:', error)
-      alert('删除失败')
+      console.error('Failed to delete all memories:', error)
+      alert(t('memory.alerts.deleteFailed'))
     }
   }
 
@@ -106,7 +109,7 @@ export default function MemoryPage() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-paper dark:bg-darkPaper flex items-center justify-center">
-        <div className="text-subInk dark:text-darkSubInk">加载中...</div>
+        <div className="text-subInk dark:text-darkSubInk">{t('common.loading')}</div>
       </div>
     )
   }
@@ -129,7 +132,7 @@ export default function MemoryPage() {
             </button>
             <div className="flex items-center gap-2">
               <Brain className="w-5 h-5 text-accent dark:text-darkAccent" />
-              <h1 className="text-lg font-serif text-ink dark:text-darkInk">记忆</h1>
+              <h1 className="text-lg font-serif text-ink dark:text-darkInk">{t('memory.title')}</h1>
               <span className="text-sm text-muted dark:text-muted/60">({total})</span>
             </div>
           </div>
@@ -137,11 +140,11 @@ export default function MemoryPage() {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={handleDeleteAll} disabled={memories.length === 0}>
               <Trash2 className="w-4 h-4 mr-1" />
-              清空
+              {t('memory.buttons.clear')}
             </Button>
             <Button size="sm" onClick={handleAdd}>
               <Plus className="w-4 h-4 mr-1" />
-              添加
+              {t('memory.buttons.add')}
             </Button>
           </div>
         </div>
@@ -165,7 +168,11 @@ export default function MemoryPage() {
                     : 'bg-muted/10 dark:bg-white/5 text-subInk dark:text-darkSubInk hover:bg-muted/20 dark:hover:bg-white/10'
                 }`}
               >
-                {f === 'all' ? '全部' : f === 'chat' ? '对话提取' : '手动添加'}
+                {f === 'all'
+                  ? t('memory.filters.all')
+                  : f === 'chat'
+                    ? t('memory.filters.chat')
+                    : t('memory.filters.manual')}
               </button>
             ))}
           </div>
@@ -176,7 +183,7 @@ export default function MemoryPage() {
       <main className="max-w-4xl mx-auto px-4 pb-8">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="text-subInk dark:text-darkSubInk">加载中...</div>
+        <div className="text-subInk dark:text-darkSubInk">{t('common.loading')}</div>
           </div>
         ) : (
           <>
@@ -196,18 +203,18 @@ export default function MemoryPage() {
                   onClick={() => setPage(page - 1)}
                   disabled={page === 1}
                 >
-                  上一页
+                  {t('common.pagination.previous')}
                 </Button>
                 <span className="text-sm text-muted dark:text-muted/60">
-                  第 {page} 页 / 共 {Math.ceil(total / 20)} 页
+                  {t('memory.pagination.pageStatus', { page, total: totalPages })}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setPage(page + 1)}
-                  disabled={page >= Math.ceil(total / 20)}
+                  disabled={page >= totalPages}
                 >
-                  下一页
+                  {t('common.pagination.next')}
                 </Button>
               </div>
             )}

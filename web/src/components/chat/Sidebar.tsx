@@ -5,6 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { api } from '@/services/api'
 import type { Topic } from '@/types'
 import { Logo } from '@/components/common/Logo'
+import { useI18n } from '@/contexts/I18nContext'
 import {
   Plus,
   MessageSquare,
@@ -41,6 +42,7 @@ export function Sidebar({
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { t, language } = useI18n()
   const [topics, setTopics] = useState<Topic[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -53,11 +55,11 @@ export function Sidebar({
   const loadTopics = async () => {
     try {
       const data = await api.getTopics()
-      // 过滤掉 Flowmo 话题
+      // Filter out Flowmo-specific topics
       const normalTopics = data.topics.filter((t) => !t.is_flowmo)
       setTopics(normalTopics)
     } catch (error) {
-      console.error('加载话题失败:', error)
+      console.error('Failed to load topics:', error)
     } finally {
       setLoading(false)
     }
@@ -65,7 +67,7 @@ export function Sidebar({
 
   const handleDelete = async (e: React.MouseEvent, topicId: string) => {
     e.stopPropagation()
-    if (!confirm('确定要删除这个对话吗？')) return
+    if (!confirm(t('sidebar.confirmations.deleteTopic'))) return
     try {
       await api.deleteTopic(topicId)
       setTopics(topics.filter((t) => t.id !== topicId))
@@ -73,7 +75,7 @@ export function Sidebar({
         onNewTopic()
       }
     } catch (error) {
-      console.error('删除话题失败:', error)
+      console.error('Failed to delete topic:', error)
     }
   }
 
@@ -95,7 +97,7 @@ export function Sidebar({
         topics.map((t) => (t.id === topicId ? { ...t, title: editTitle } : t))
       )
     } catch (error) {
-      console.error('更新话题失败:', error)
+      console.error('Failed to update topic:', error)
     } finally {
       setEditingId(null)
     }
@@ -118,10 +120,13 @@ export function Sidebar({
       (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
     )
 
-    if (diffDays === 0) return '今天'
-    if (diffDays === 1) return '昨天'
-    if (diffDays < 7) return `${diffDays}天前`
-    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+    if (diffDays === 0) return t('common.time.today')
+    if (diffDays === 1) return t('common.time.yesterday')
+    if (diffDays < 7) return t('common.time.daysAgo', { count: diffDays })
+    return date.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+      month: 'short',
+      day: 'numeric',
+    })
   }
 
   if (collapsed) {
@@ -137,7 +142,7 @@ export function Sidebar({
         <button
           onClick={onNewTopic}
           className="p-3 rounded-lg bg-accent/10 dark:bg-darkAccent/10 hover:bg-accent/20 dark:hover:bg-darkAccent/20 transition-colors mb-4"
-          title="新对话"
+          title={t('sidebar.actions.newChat')}
         >
           <Plus className="w-5 h-5 text-accent dark:text-darkAccent" />
         </button>
@@ -148,7 +153,7 @@ export function Sidebar({
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 transition-colors"
-            title={theme === 'dark' ? '浅色模式' : '深色模式'}
+            title={theme === 'dark' ? t('sidebar.actions.themeLight') : t('sidebar.actions.themeDark')}
           >
             {theme === 'dark' ? (
               <Sun className="w-5 h-5 text-darkSubInk" />
@@ -159,7 +164,7 @@ export function Sidebar({
           <button
             onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 transition-colors"
-            title="退出登录"
+            title={t('sidebar.actions.logout')}
           >
             <LogOut className="w-5 h-5 text-subInk dark:text-darkSubInk" />
           </button>
@@ -188,7 +193,7 @@ export function Sidebar({
           className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 dark:bg-darkAccent/10 hover:bg-accent/20 dark:hover:bg-darkAccent/20 text-accent dark:text-darkAccent transition-colors"
         >
           <Plus className="w-4 h-4" />
-          <span className="text-sm font-medium">新对话</span>
+          <span className="text-sm font-medium">{t('sidebar.actions.newChat')}</span>
         </button>
       </div>
 
@@ -197,12 +202,12 @@ export function Sidebar({
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <span className="text-sm text-subInk dark:text-darkSubInk">
-              加载中...
+              {t('sidebar.list.loading')}
             </span>
           </div>
         ) : topics.length === 0 ? (
           <div className="text-center py-8 text-subInk dark:text-darkSubInk text-sm">
-            暂无对话
+            {t('sidebar.list.empty')}
           </div>
         ) : (
           <div className="space-y-1">
@@ -244,7 +249,7 @@ export function Sidebar({
                   ) : (
                     <>
                       <div className="text-sm text-ink dark:text-darkInk truncate">
-                        {topic.title || '新对话'}
+                        {topic.title || t('sidebar.list.defaultTitle')}
                       </div>
                       <div className="text-xs text-muted dark:text-muted/60">
                         {formatDate(topic.updated_at)}
@@ -281,14 +286,14 @@ export function Sidebar({
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk transition-colors"
         >
           <Brain className="w-4 h-4" />
-          <span className="text-sm">记忆</span>
+          <span className="text-sm">{t('sidebar.quickLinks.memories')}</span>
         </button>
         <button
           onClick={() => navigate('/app/flowmo')}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk transition-colors"
         >
           <Sparkles className="w-4 h-4" />
-          <span className="text-sm">Flowmo</span>
+          <span className="text-sm">{t('sidebar.quickLinks.flowmo')}</span>
         </button>
       </div>
 
@@ -319,7 +324,7 @@ export function Sidebar({
             <button
               onClick={() => navigate('/app/settings')}
               className="p-1.5 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 transition-colors"
-              title="设置"
+              title={t('sidebar.actions.settings')}
             >
               <Settings className="w-4 h-4 text-subInk dark:text-darkSubInk" />
             </button>
@@ -327,7 +332,7 @@ export function Sidebar({
               <button
                 onClick={() => navigate('/app/admin')}
                 className="p-1.5 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 transition-colors"
-                title="管理后台"
+                title={t('sidebar.actions.admin')}
               >
                 <Shield className="w-4 h-4 text-subInk dark:text-darkSubInk" />
               </button>
@@ -335,7 +340,7 @@ export function Sidebar({
             <button
               onClick={handleLogout}
               className="p-1.5 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 transition-colors"
-              title="退出登录"
+              title={t('sidebar.actions.logout')}
             >
               <LogOut className="w-4 h-4 text-subInk dark:text-darkSubInk" />
             </button>

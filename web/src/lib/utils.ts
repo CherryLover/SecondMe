@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * 格式化日期时间
+ * Format date time string for display
  */
 export function formatDateTime(isoString: string | null): string {
   if (!isoString) return '-'
@@ -21,7 +21,7 @@ export function formatDateTime(isoString: string | null): string {
 }
 
 /**
- * 格式化日期
+ * Format date only string for display
  */
 export function formatDate(isoString: string | null): string {
   if (!isoString) return '-'
@@ -34,7 +34,7 @@ export function formatDate(isoString: string | null): string {
 }
 
 /**
- * HTML 转义
+ * Escape HTML entities
  */
 export function escapeHtml(text: string): string {
   const div = document.createElement('div')

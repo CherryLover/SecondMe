@@ -21,7 +21,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* 自定义滚动条 */
+  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -42,7 +42,7 @@
 }
 
 @layer utilities {
-  /* 渐入动画 */
+  /* Fade-in animation */
   .animate-fade-in {
     animation: fadeIn 0.6s ease-out forwards;
   }
@@ -58,7 +58,7 @@
     }
   }
 
-  /* 浮动动画 */
+  /* Floating animation */
   .animate-float-slow {
     animation: float 15s ease-in-out infinite;
   }
@@ -82,7 +82,7 @@
     }
   }
 
-  /* 打字指示器 */
+  /* Typing indicator */
   .typing-dot {
     animation: typing 1.4s infinite ease-in-out both;
   }

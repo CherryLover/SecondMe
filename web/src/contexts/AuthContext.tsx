@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // 初始化时从 localStorage 恢复状态
+  // Restore auth state from localStorage
   useEffect(() => {
     const savedToken = localStorage.getItem(TOKEN_KEY)
     const savedUser = localStorage.getItem(USER_KEY)
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(savedToken)
         setUser(JSON.parse(savedUser))
       } catch {
-        // 解析失败，清除存储
+        // If parsing fails, clear the storage
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(USER_KEY)
       }

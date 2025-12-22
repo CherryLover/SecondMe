@@ -3,6 +3,7 @@ import type { Provider, ProviderInput } from '@/types'
 import { X, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface ProviderModalProps {
   provider: Provider | null
@@ -16,12 +17,13 @@ export function ProviderModal({ provider, onClose, onSave }: ProviderModalProps)
   const [apiKey, setApiKey] = useState('')
   const [enabled, setEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
+  const { t } = useI18n()
 
   useEffect(() => {
     if (provider) {
       setName(provider.name)
       setBaseUrl(provider.base_url)
-      setApiKey('') // API Key 不回显
+      setApiKey('') // Never echo the API key
       setEnabled(provider.enabled)
     } else {
       setName('')
@@ -43,8 +45,8 @@ export function ProviderModal({ provider, onClose, onSave }: ProviderModalProps)
       })
       onClose()
     } catch (error) {
-      console.error('保存失败:', error)
-      alert('保存失败')
+      console.error('Failed to save provider:', error)
+      alert(t('provider.modal.alerts.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -66,7 +68,7 @@ export function ProviderModal({ provider, onClose, onSave }: ProviderModalProps)
               <Server className="w-4 h-4 text-accent dark:text-darkAccent" />
             </div>
             <h2 className="text-lg font-serif text-ink dark:text-darkInk">
-              {isEdit ? '编辑服务商' : '添加服务商'}
+              {isEdit ? t('provider.modal.editTitle') : t('provider.modal.addTitle')}
             </h2>
           </div>
           <button
@@ -80,35 +82,36 @@ export function ProviderModal({ provider, onClose, onSave }: ProviderModalProps)
         <div className="p-6 space-y-4">
           <div>
             <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-              名称 *
+              {t('provider.modal.fields.name')}
             </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="如：OpenAI、DeepSeek"
+              placeholder={t('provider.modal.fields.namePlaceholder')}
             />
           </div>
 
           <div>
             <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-              Base URL *
+              {t('provider.modal.fields.baseUrl')}
             </label>
             <Input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="如：https://api.openai.com/v1"
+              placeholder={t('provider.modal.fields.baseUrlPlaceholder')}
             />
           </div>
 
           <div>
             <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-              API Key {isEdit && '(留空保持不变)'}
+              {t('provider.modal.fields.apiKey')}{' '}
+              {isEdit && t('provider.modal.fields.apiKeyHint')}
             </label>
             <Input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder={t('provider.modal.fields.apiKeyPlaceholder')}
             />
           </div>
 
@@ -121,20 +124,20 @@ export function ProviderModal({ provider, onClose, onSave }: ProviderModalProps)
               className="w-4 h-4 rounded border-muted/30 text-accent focus:ring-accent"
             />
             <label htmlFor="enabled" className="text-sm text-ink dark:text-darkInk">
-              启用此服务商
+              {t('provider.modal.fields.enabled')}
             </label>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-muted/10 dark:border-white/5">
           <Button variant="ghost" onClick={onClose}>
-            取消
+            {t('provider.modal.buttons.cancel')}
           </Button>
           <Button
             onClick={handleSave}
             disabled={!name.trim() || !baseUrl.trim() || saving}
           >
-            {saving ? '保存中...' : '保存'}
+            {saving ? t('provider.modal.buttons.saving') : t('provider.modal.buttons.save')}
           </Button>
         </div>
       </div>

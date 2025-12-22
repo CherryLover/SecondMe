@@ -18,11 +18,13 @@ import {
   Sun,
   Key,
 } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
   const { user, isLoading: authLoading } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { t } = useI18n()
 
   const [providers, setProviders] = useState<Provider[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -31,13 +33,13 @@ export default function SettingsPage() {
   const [showProviderModal, setShowProviderModal] = useState(false)
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null)
 
-  // 密码修改
+  // Password change
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
 
-  // 设置更新
+  // Settings update
   const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function SettingsPage() {
       setProviders(providersData.providers)
       setSettings(settingsData)
     } catch (error) {
-      console.error('加载数据失败:', error)
+      console.error('Failed to load settings:', error)
     } finally {
       setLoading(false)
     }
@@ -93,8 +95,8 @@ export default function SettingsPage() {
       await api.deleteProvider(id)
       setProviders(providers.filter((p) => p.id !== id))
     } catch (error) {
-      console.error('删除服务商失败:', error)
-      alert('删除失败')
+      console.error('Failed to delete provider:', error)
+      alert(t('settings.alerts.deleteFailed'))
     }
   }
 
@@ -105,8 +107,8 @@ export default function SettingsPage() {
       const updated = await api.updateSettings(updates)
       setSettings(updated)
     } catch (error) {
-      console.error('更新设置失败:', error)
-      alert('更新失败')
+      console.error('Failed to update settings:', error)
+      alert(t('settings.alerts.saveFailed'))
     } finally {
       setSavingSettings(false)
     }
@@ -114,28 +116,28 @@ export default function SettingsPage() {
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
-      alert('请填写当前密码和新密码')
+      alert(t('settings.password.errors.required'))
       return
     }
     if (newPassword !== confirmPassword) {
-      alert('两次输入的密码不一致')
+      alert(t('settings.password.errors.mismatch'))
       return
     }
     if (newPassword.length < 6) {
-      alert('新密码至少需要6位')
+      alert(t('settings.password.errors.short'))
       return
     }
 
     setChangingPassword(true)
     try {
       await api.changePassword(currentPassword, newPassword)
-      alert('密码修改成功')
+      alert(t('settings.password.success'))
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (error) {
-      console.error('修改密码失败:', error)
-      alert(error instanceof Error ? error.message : '修改失败')
+      console.error('Failed to change password:', error)
+      alert(error instanceof Error ? error.message : t('settings.alerts.saveFailed'))
     } finally {
       setChangingPassword(false)
     }
@@ -144,7 +146,7 @@ export default function SettingsPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-paper dark:bg-darkPaper flex items-center justify-center">
-        <div className="text-subInk dark:text-darkSubInk">加载中...</div>
+        <div className="text-subInk dark:text-darkSubInk">{t('common.loading')}</div>
       </div>
     )
   }
@@ -168,13 +170,13 @@ export default function SettingsPage() {
           </button>
           <div className="flex items-center gap-2">
             <SettingsIcon className="w-5 h-5 text-accent dark:text-darkAccent" />
-            <h1 className="text-lg font-serif text-ink dark:text-darkInk">设置</h1>
+            <h1 className="text-lg font-serif text-ink dark:text-darkInk">{t('settings.title')}</h1>
           </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-8">
-        {/* 主题设置 */}
+        {/* Theme settings */}
         <section className="bg-white dark:bg-white/5 rounded-xl p-6 border border-muted/10 dark:border-white/5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -184,81 +186,83 @@ export default function SettingsPage() {
                 <Sun className="w-5 h-5 text-accent dark:text-darkAccent" />
               )}
               <div>
-                <h2 className="font-medium text-ink dark:text-darkInk">主题</h2>
+                <h2 className="font-medium text-ink dark:text-darkInk">{t('settings.theme.title')}</h2>
                 <p className="text-sm text-subInk dark:text-darkSubInk">
-                  当前: {theme === 'dark' ? '深色模式' : '浅色模式'}
+                  {t('settings.theme.current', {
+                    mode: theme === 'dark' ? t('settings.theme.dark') : t('settings.theme.light'),
+                  })}
                 </p>
               </div>
             </div>
             <Button variant="outline" onClick={toggleTheme}>
-              切换主题
+              {t('settings.theme.toggle')}
             </Button>
           </div>
         </section>
 
-        {/* 密码修改 */}
+        {/* Password */}
         <section className="bg-white dark:bg-white/5 rounded-xl p-6 border border-muted/10 dark:border-white/5">
           <div className="flex items-center gap-3 mb-4">
             <Key className="w-5 h-5 text-accent dark:text-darkAccent" />
-            <h2 className="font-medium text-ink dark:text-darkInk">修改密码</h2>
+            <h2 className="font-medium text-ink dark:text-darkInk">{t('settings.password.title')}</h2>
           </div>
 
           <div className="space-y-4 max-w-sm">
             <div>
               <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-                当前密码
+                {t('settings.password.current')}
               </label>
               <Input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="输入当前密码"
+                placeholder={t('settings.password.placeholderCurrent')}
               />
             </div>
             <div>
               <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-                新密码
+                {t('settings.password.new')}
               </label>
               <Input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="输入新密码（至少6位）"
+                placeholder={t('settings.password.placeholderNew')}
               />
             </div>
             <div>
               <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-                确认新密码
+                {t('settings.password.confirm')}
               </label>
               <Input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="再次输入新密码"
+                placeholder={t('settings.password.placeholderConfirm')}
               />
             </div>
             <Button
               onClick={handleChangePassword}
               disabled={changingPassword}
             >
-              {changingPassword ? '修改中...' : '修改密码'}
+              {changingPassword ? t('settings.password.buttonLoading') : t('settings.password.button')}
             </Button>
           </div>
         </section>
 
-        {/* 管理员设置 */}
+        {/* Admin settings */}
         {isAdmin && (
           <>
-            {/* 服务商管理 */}
+            {/* Provider management */}
             <section className="bg-white dark:bg-white/5 rounded-xl p-6 border border-muted/10 dark:border-white/5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Server className="w-5 h-5 text-accent dark:text-darkAccent" />
-                  <h2 className="font-medium text-ink dark:text-darkInk">服务商管理</h2>
+                  <h2 className="font-medium text-ink dark:text-darkInk">{t('settings.providers.title')}</h2>
                 </div>
                 <Button size="sm" onClick={handleAddProvider}>
                   <Plus className="w-4 h-4 mr-1" />
-                  添加
+                  {t('settings.providers.add')}
                 </Button>
               </div>
 
@@ -269,18 +273,18 @@ export default function SettingsPage() {
               />
             </section>
 
-            {/* 记忆设置 */}
+            {/* Memory settings */}
             {settings && (
               <section className="bg-white dark:bg-white/5 rounded-xl p-6 border border-muted/10 dark:border-white/5">
                 <div className="flex items-center gap-3 mb-4">
                   <Brain className="w-5 h-5 text-accent dark:text-darkAccent" />
-                  <h2 className="font-medium text-ink dark:text-darkInk">记忆设置</h2>
+                  <h2 className="font-medium text-ink dark:text-darkInk">{t('settings.memorySettings.title')}</h2>
                 </div>
 
                 <div className="space-y-4 max-w-sm">
                   <div>
                     <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-                      记忆检索数量 (Top K)
+                      {t('settings.memorySettings.topK')}
                     </label>
                     <Input
                       type="number"
@@ -294,7 +298,7 @@ export default function SettingsPage() {
                       disabled={savingSettings}
                     />
                     <p className="text-xs text-muted dark:text-muted/60 mt-1">
-                      每次对话检索最相关的记忆条数
+                      {t('settings.memorySettings.topKDesc')}
                     </p>
                   </div>
 
@@ -309,14 +313,14 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded border-muted/30 text-accent focus:ring-accent"
                     />
                     <label htmlFor="memory_extraction" className="text-sm text-ink dark:text-darkInk">
-                      启用记忆自动提取
+                      {t('settings.memorySettings.autoExtract')}
                     </label>
                   </div>
 
                   {settings.memory_extraction_enabled && (
                     <div>
                       <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
-                        静默提取间隔（分钟）
+                        {t('settings.memorySettings.idleMinutes')}
                       </label>
                       <Input
                         type="number"
@@ -329,7 +333,7 @@ export default function SettingsPage() {
                         }}
                       />
                       <p className="text-xs text-muted dark:text-muted/60 mt-1">
-                        对话静默后多久触发记忆提取
+                        {t('settings.memorySettings.idleDesc')}
                       </p>
                     </div>
                   )}

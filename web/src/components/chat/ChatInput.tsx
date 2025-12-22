@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface ChatInputProps {
   onSend: (content: string) => void
@@ -10,10 +11,12 @@ interface ChatInputProps {
 export function ChatInput({
   onSend,
   disabled,
-  placeholder = '写下你想说的话...',
+  placeholder,
 }: ChatInputProps) {
   const [content, setContent] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { t } = useI18n()
+  const effectivePlaceholder = placeholder ?? t('chat.placeholders.composer')
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -47,7 +50,7 @@ export function ChatInput({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder}
+            placeholder={effectivePlaceholder}
             disabled={disabled}
             rows={1}
             className="flex-1 bg-transparent resize-none outline-none text-ink dark:text-darkInk placeholder:text-muted dark:placeholder:text-muted/60 text-sm leading-relaxed max-h-[200px]"
@@ -65,7 +68,7 @@ export function ChatInput({
           </button>
         </div>
         <p className="text-center text-xs text-muted dark:text-muted/60 mt-2">
-          按 Enter 发送，Shift + Enter 换行
+          {t('chat.helper')}
         </p>
       </div>
     </div>

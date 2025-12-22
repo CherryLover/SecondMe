@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Provider } from '@/types'
 import { Server, Trash2, Edit3, CheckCircle, XCircle } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface ProviderListProps {
   providers: Provider[]
@@ -10,9 +11,10 @@ interface ProviderListProps {
 
 export function ProviderList({ providers, onEdit, onDelete }: ProviderListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { t } = useI18n()
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除这个服务商吗？')) return
+    if (!confirm(t('provider.confirmDelete'))) return
     setDeletingId(id)
     try {
       await onDelete(id)
@@ -24,7 +26,7 @@ export function ProviderList({ providers, onEdit, onDelete }: ProviderListProps)
   if (providers.length === 0) {
     return (
       <div className="text-center py-8 text-subInk dark:text-darkSubInk text-sm">
-        暂无服务商配置
+        {t('settings.providers.empty')}
       </div>
     )
   }
@@ -62,7 +64,7 @@ export function ProviderList({ providers, onEdit, onDelete }: ProviderListProps)
               <button
                 onClick={() => onEdit(provider)}
                 className="p-2 rounded-lg hover:bg-muted/10 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk"
-                title="编辑"
+                title={t('memory.list.edit')}
               >
                 <Edit3 className="w-4 h-4" />
               </button>
@@ -70,7 +72,7 @@ export function ProviderList({ providers, onEdit, onDelete }: ProviderListProps)
                 onClick={() => handleDelete(provider.id)}
                 disabled={deletingId === provider.id}
                 className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 dark:text-red-400 disabled:opacity-50"
-                title="删除"
+                title={t('memory.list.delete')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>

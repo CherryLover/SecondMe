@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { Memory } from '@/types'
 import { X, Clock, Hash, Brain } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useI18n } from '@/contexts/I18nContext'
 
 interface MemoryModalProps {
   memory: Memory | null
@@ -10,18 +11,19 @@ interface MemoryModalProps {
   onSave: (content: string) => Promise<void>
 }
 
-const memoryTypeLabels: Record<string, string> = {
-  personal: '个人信息',
-  preference: '偏好',
-  fact: '事实',
-  plan: '计划',
-  manual: '手动添加',
-  chat: '对话提取',
+const memoryTypeLabelKeys: Record<string, string> = {
+  personal: 'memory.list.types.personal',
+  preference: 'memory.list.types.preference',
+  fact: 'memory.list.types.fact',
+  plan: 'memory.list.types.plan',
+  manual: 'memory.list.types.manual',
+  chat: 'memory.list.types.chat',
 }
 
 export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps) {
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const { t, language } = useI18n()
 
   useEffect(() => {
     if (memory) {
@@ -38,14 +40,14 @@ export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps)
       await onSave(content.trim())
       onClose()
     } catch (error) {
-      console.error('保存失败:', error)
+      console.error('Failed to save memory:', error)
     } finally {
       setSaving(false)
     }
   }
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('zh-CN', {
+    return new Date(dateStr).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -54,7 +56,12 @@ export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps)
     })
   }
 
-  const title = mode === 'add' ? '添加记忆' : mode === 'edit' ? '编辑记忆' : '记忆详情'
+  const title =
+    mode === 'add'
+      ? t('memory.modal.titles.add')
+      : mode === 'edit'
+        ? t('memory.modal.titles.edit')
+        : t('memory.modal.titles.view')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -86,31 +93,33 @@ export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps)
         <div className="p-6">
           {mode === 'view' && memory ? (
             <div className="space-y-4">
-              {/* 类型 */}
+              {/* Type */}
               <div>
                 <label className="text-xs text-muted dark:text-muted/60 uppercase tracking-wider">
-                  类型
+                  {t('memory.modal.fields.type')}
                 </label>
                 <p className="text-ink dark:text-darkInk mt-1">
-                  {memoryTypeLabels[memory.memory_type] || memory.memory_type}
+                  {memoryTypeLabelKeys[memory.memory_type]
+                    ? t(memoryTypeLabelKeys[memory.memory_type])
+                    : memory.memory_type}
                 </p>
               </div>
 
-              {/* 内容 */}
+              {/* Content */}
               <div>
                 <label className="text-xs text-muted dark:text-muted/60 uppercase tracking-wider">
-                  内容
+                  {t('memory.modal.fields.content')}
                 </label>
                 <p className="text-ink dark:text-darkInk mt-1 whitespace-pre-wrap leading-relaxed">
                   {memory.content}
                 </p>
               </div>
 
-              {/* 元信息 */}
+              {/* Metadata */}
               <div className="flex gap-6 pt-4 border-t border-muted/10 dark:border-white/5">
                 <div>
                   <label className="text-xs text-muted dark:text-muted/60 uppercase tracking-wider flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> 创建时间
+                    <Clock className="w-3 h-3" /> {t('memory.modal.fields.createdAt')}
                   </label>
                   <p className="text-sm text-ink dark:text-darkInk mt-1">
                     {formatDate(memory.created_at)}
@@ -118,25 +127,25 @@ export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps)
                 </div>
                 <div>
                   <label className="text-xs text-muted dark:text-muted/60 uppercase tracking-wider flex items-center gap-1">
-                    <Hash className="w-3 h-3" /> 使用次数
+                    <Hash className="w-3 h-3" /> {t('memory.modal.fields.useCount')}
                   </label>
                   <p className="text-sm text-ink dark:text-darkInk mt-1">
-                    {memory.use_count} 次
+                    {t('memory.list.useCount', { count: memory.use_count })}
                   </p>
                 </div>
               </div>
 
-              {/* 使用记录 */}
+              {/* Usage records */}
               {memory.usage_records && memory.usage_records.length > 0 && (
                 <div className="pt-4 border-t border-muted/10 dark:border-white/5">
                   <label className="text-xs text-muted dark:text-muted/60 uppercase tracking-wider">
-                    最近使用
+                    {t('memory.modal.fields.recentUsage')}
                   </label>
                   <div className="mt-2 space-y-2">
                     {memory.usage_records.slice(0, 5).map((record, i) => (
                       <div key={i} className="flex items-center justify-between text-sm">
                         <span className="text-ink dark:text-darkInk truncate">
-                          {record.topic_title || '未命名对话'}
+                          {record.topic_title || t('memory.list.untitled')}
                         </span>
                         <span className="text-muted dark:text-muted/60 text-xs shrink-0">
                           {formatDate(record.used_at)}
@@ -150,18 +159,18 @@ export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps)
           ) : (
             <div>
               <label className="text-xs text-muted dark:text-muted/60 uppercase tracking-wider block mb-2">
-                记忆内容
+                {t('memory.modal.fields.content')}
               </label>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="输入你想记住的信息..."
+                placeholder={t('memory.modal.fields.placeholder')}
                 rows={5}
                 className="w-full bg-white dark:bg-white/5 rounded-lg px-4 py-3 text-ink dark:text-darkInk placeholder:text-muted dark:placeholder:text-muted/60 border border-muted/10 dark:border-white/10 focus:border-accent dark:focus:border-darkAccent outline-none resize-none"
                 autoFocus
               />
               <p className="text-xs text-muted dark:text-muted/60 mt-2">
-                这些信息会在对话中被自动检索使用
+                {t('memory.modal.fields.helper')}
               </p>
             </div>
           )}
@@ -170,14 +179,14 @@ export function MemoryModal({ memory, mode, onClose, onSave }: MemoryModalProps)
         {/* Footer */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-muted/10 dark:border-white/5">
           <Button variant="ghost" onClick={onClose}>
-            {mode === 'view' ? '关闭' : '取消'}
+            {mode === 'view' ? t('memory.modal.buttons.close') : t('memory.modal.buttons.cancel')}
           </Button>
           {mode !== 'view' && (
             <Button
               onClick={handleSave}
               disabled={!content.trim() || saving}
             >
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('memory.modal.buttons.saving') : t('memory.modal.buttons.save')}
             </Button>
           )}
         </div>

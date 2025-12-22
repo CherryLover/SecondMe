@@ -7,10 +7,12 @@ import { Sidebar } from '@/components/chat/Sidebar'
 import { ChatMessages } from '@/components/chat/ChatMessages'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { Menu } from 'lucide-react'
+import { useI18n } from '@/contexts/I18nContext'
 
 export default function ChatPage() {
   const navigate = useNavigate()
   const { user, isLoading } = useAuth()
+  const { t } = useI18n()
   const [currentTopic, setCurrentTopic] = useState<Topic | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -39,7 +41,7 @@ export default function ChatPage() {
       const data = await api.getMessages(topicId)
       setMessages(data.messages)
     } catch (error) {
-      console.error('加载消息失败:', error)
+      console.error('Failed to load messages:', error)
     } finally {
       setLoadingMessages(false)
     }
@@ -59,7 +61,7 @@ export default function ChatPage() {
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return
 
-    // 如果没有当前话题，先创建一个
+    // Create a topic automatically if none exists
     let topicId = currentTopic?.id
     if (!topicId) {
       try {
@@ -67,12 +69,12 @@ export default function ChatPage() {
         setCurrentTopic(newTopic)
         topicId = newTopic.id
       } catch (error) {
-        console.error('创建话题失败:', error)
+        console.error('Failed to create topic:', error)
         return
       }
     }
 
-    // 添加用户消息到列表（临时 ID）
+    // Add the user message locally with a temporary id
     const userMessage: Message = {
       id: `temp-${Date.now()}`,
       topic_id: topicId,
@@ -82,7 +84,7 @@ export default function ChatPage() {
     }
     setMessages((prev) => [...prev, userMessage])
 
-    // 开始流式响应
+    // Start streaming response
     setIsStreaming(true)
     setStreamingContent('')
 
@@ -98,7 +100,7 @@ export default function ChatPage() {
         (data) => {
           setIsStreaming(false)
           setStreamingContent('')
-          // 添加完整的 AI 消息
+          // Append the assistant message once streaming is done
           const aiMessage: Message = {
             id: data.message_id,
             topic_id: topicId!,
@@ -106,14 +108,14 @@ export default function ChatPage() {
             content: data.full_content,
             created_at: new Date().toISOString(),
           }
-          // 更新用户消息 ID
+          // Update the temporary user message id
           setMessages((prev) => {
             const updated = prev.map((m) =>
               m.id === userMessage.id ? { ...m, id: data.user_message_id } : m
             )
             return [...updated, aiMessage]
           })
-          // 如果话题标题更新了
+          // Update topic title if backend renamed it
           if (data.topic_title && currentTopic) {
             setCurrentTopic({ ...currentTopic, title: data.topic_title })
           }
@@ -122,8 +124,8 @@ export default function ChatPage() {
         (error) => {
           setIsStreaming(false)
           setStreamingContent('')
-          console.error('消息发送失败:', error)
-          // 移除临时用户消息
+          console.error('Message streaming failed:', error)
+          // Remove the temporary user message
           setMessages((prev) => prev.filter((m) => m.id !== userMessage.id))
           alert(error)
         }
@@ -131,14 +133,14 @@ export default function ChatPage() {
     } catch (error) {
       setIsStreaming(false)
       setStreamingContent('')
-      console.error('发送消息失败:', error)
+      console.error('Failed to send message:', error)
     }
   }
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-paper dark:bg-darkPaper flex items-center justify-center">
-        <div className="text-subInk dark:text-darkSubInk">加载中...</div>
+        <div className="text-subInk dark:text-darkSubInk">{t('common.loading')}</div>
       </div>
     )
   }
@@ -183,14 +185,14 @@ export default function ChatPage() {
             <Menu className="w-5 h-5 text-ink dark:text-darkInk" />
           </button>
           <span className="text-sm font-medium text-ink dark:text-darkInk truncate">
-            {currentTopic?.title || '新对话'}
+            {currentTopic?.title || t('chat.newConversation')}
           </span>
         </div>
 
         {/* Chat area */}
         {loadingMessages ? (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-subInk dark:text-darkSubInk">加载消息...</div>
+            <div className="text-subInk dark:text-darkSubInk">{t('chat.loadingMessages')}</div>
           </div>
         ) : (
           <ChatMessages
@@ -206,8 +208,8 @@ export default function ChatPage() {
           disabled={isStreaming}
           placeholder={
             currentTopic
-              ? '继续对话...'
-              : '写下你想说的话，开始新对话...'
+              ? t('chat.placeholders.continueConversation')
+              : t('chat.placeholders.newConversation')
           }
         />
       </div>
