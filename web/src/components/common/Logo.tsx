@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useI18n } from '@/contexts/I18nContext'
+import type { AppMessages } from '@/i18n/translations'
 
 const ICON_SRC = '/secondme-icon.svg'
 
@@ -21,6 +23,11 @@ const iconSizeClasses = {
 }
 
 export function Logo({ className = '', linkTo = '/', size = 'md' }: LogoProps) {
+  const { tm } = useI18n()
+  const branding = tm<AppMessages['branding']>('branding')
+  const label = branding?.name ?? 'Evera'
+  const logoAlt = branding?.logoAlt ?? label
+
   return (
     <Link
       to={linkTo}
@@ -28,10 +35,10 @@ export function Logo({ className = '', linkTo = '/', size = 'md' }: LogoProps) {
     >
       <img
         src={ICON_SRC}
-        alt="SecondMe 图标"
+        alt={logoAlt}
         className={`shrink-0 drop-shadow-sm ${iconSizeClasses[size]}`}
       />
-      <span>SecondMe</span>
+      <span>{label}</span>
     </Link>
   )
 }

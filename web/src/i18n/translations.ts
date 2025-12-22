@@ -60,6 +60,10 @@ export const translations = {
         requestFailed: '请求失败: {{status}}',
       },
     },
+    branding: {
+      name: '常在',
+      logoAlt: '「常在」图标',
+    },
     landing: {
       nav: {
         toggleTheme: '切换主题',
@@ -71,37 +75,37 @@ export const translations = {
       },
       hero: {
         title: '每个人，都应该有一个<br />可以和自己说话的地方。',
-        subtitle: 'SecondMe：一个只属于你自己的空间',
+        subtitle: '常在：一个只属于你自己的空间',
         scroll: '向下阅读',
       },
       sections: {
         origin: {
           label: '缘起 / ORIGIN',
-          title: '为什么会有 SecondMe',
+          title: '为什么会有「常在」',
           content: [
             '每个人都会经历这样的时刻：看完一本书，却不知道该跟谁聊；听到一首歌，被触动了，却说不清原因；走过一段风景，心里有感受，却无处安放。',
             '有些情绪，不适合说给任何人听。<br/>有些想法，太零碎，也太私人。',
           ],
           quote:
             '我们并不是缺少表达的能力，<br/>而是缺少一个<strong>不会打断、不会评判、不会离开的空间</strong>。',
-          conclusion: 'SecondMe 正是为此而存在。',
+          conclusion: '「常在」正是为此而存在。',
         },
         define: {
           label: '定义 / DEFINE',
-          title: 'SecondMe 是什么',
+          title: '「常在」是什么',
           notThis: '它不是',
           isThis: '它是',
           notList: ['社交产品', '让你关注别人', '追求互动与热闹'],
           isList: ['一个个人空间', '你可以慢慢说，反复说', '陪你记下走过的路'],
           summary:
-            'SecondMe 的角色，不是指导你该怎么做，而是<strong>时间没有断裂的陪伴</strong>。',
+            '「常在」的角色，不是指导你该怎么做，而是<strong>时间没有断裂的陪伴</strong>。',
         },
         boundary: {
           label: '边界 / BOUNDARY',
           title: '我们不想做什么',
-          intro: '在使用 SecondMe 之前，我们想先把一些事情说清楚。<br/>如果你期待的是：',
+          intro: '在使用「常在」之前，我们想先把一些事情说清楚。<br/>如果你期待的是：',
           tags: ['被激励', '被评估', '被对比', '被引导'],
-          conclusion: '那 SecondMe 可能并不适合你。',
+          conclusion: '那「常在」可能并不适合你。',
         },
         vision: {
           label: '愿景 / VISION',
@@ -124,13 +128,13 @@ export const translations = {
         privacy: {
           label: '隐私 / PRIVACY',
           title: '独立且私密',
-          p1: 'SecondMe 支持多用户，但并不意味着「多人空间」。',
-          p2: '每一个人，都是在<strong>完全独立、互不干扰的空间里</strong>使用 SecondMe。没有公共时间线，没有比较，没有他人的目光。',
+          p1: '「常在」支持多用户，但并不意味着「多人空间」。',
+          p2: '每一个人，都是在<strong>完全独立、互不干扰的空间里</strong>使用「常在」。没有公共时间线，没有比较，没有他人的目光。',
           p3: '我们只是提供这个空间本身，空间里发生的一切，永远只属于你。',
         },
       },
       footer: {
-        title: 'SecondMe<br/>并不试图改变你。',
+        title: '「常在」<br/>并不试图改变你。',
         desc: '如果它真的有一点价值，那大概只是帮你更清楚地看见：你已经是谁，你正在成为谁。',
         cta: '进入你的空间',
         notice: '第二大脑空间正在打磨中，敬请期待。',
@@ -464,6 +468,10 @@ export const translations = {
         requestFailed: 'Request failed: {{status}}',
       },
     },
+    branding: {
+      name: 'Evera',
+      logoAlt: 'Evera icon',
+    },
     landing: {
       nav: {
         toggleTheme: 'Toggle Theme',
@@ -475,37 +483,37 @@ export const translations = {
       },
       hero: {
         title: 'Everyone deserves a place<br />to talk to themselves.',
-        subtitle: 'SecondMe: A space that belongs only to you',
+        subtitle: 'Evera: A space that belongs only to you',
         scroll: 'SCROLL DOWN',
       },
       sections: {
         origin: {
           label: 'ORIGIN',
-          title: 'Why SecondMe Exists',
+          title: 'Why Evera Exists',
           content: [
             'We all have moments like this: finishing a book with no one to share it with; being moved by a song without knowing why; walking through a landscape with feelings having nowhere to land.',
             'Some emotions are not meant for others.<br/>Some thoughts are too fragmented, too private.',
           ],
           quote:
             "It's not that we lack the ability to express,<br/>but rather a space that <strong>won't interrupt, won't judge, and won't leave</strong>.",
-          conclusion: 'This is why SecondMe exists.',
+          conclusion: 'This is why Evera exists.',
         },
         define: {
           label: 'DEFINE',
-          title: 'What is SecondMe',
+          title: 'What is Evera',
           notThis: 'Not This',
           isThis: 'This',
           notList: ['A social product', 'Following others', 'Seeking interaction or buzz'],
           isList: ['A personal space', 'Speak slowly, speak repeatedly', "Record the path you've walked"],
           summary:
-            "SecondMe's role is not to guide you, but to provide <strong>unbroken companionship over time</strong>.",
+            "Evera's role is not to guide you, but to provide <strong>unbroken companionship over time</strong>.",
         },
         boundary: {
           label: 'BOUNDARY',
           title: "What We Don't Do",
-          intro: 'Before using SecondMe, we want to be clear.<br/>If you are looking for:',
+          intro: 'Before using Evera, we want to be clear.<br/>If you are looking for:',
           tags: ['Motivation', 'Evaluation', 'Comparison', 'Guidance'],
-          conclusion: 'Then SecondMe might not be for you.',
+          conclusion: 'Then Evera might not be for you.',
         },
         vision: {
           label: 'VISION',
@@ -528,13 +536,13 @@ export const translations = {
         privacy: {
           label: 'PRIVACY',
           title: 'Independent & Private',
-          p1: 'SecondMe supports multiple users, but it is not a "multi-user space".',
-          p2: 'Everyone uses SecondMe in a <strong>completely independent, undisturbed space</strong>. No public timelines, no comparison, no gaze from others.',
+          p1: 'Evera supports multiple users, but it is not a "multi-user space".',
+          p2: 'Everyone uses Evera in a <strong>completely independent, undisturbed space</strong>. No public timelines, no comparison, no gaze from others.',
           p3: 'We only provide the space itself. Everything that happens inside belongs only to you.',
         },
       },
       footer: {
-        title: "SecondMe<br/>Doesn't Try to Change You.",
+        title: "Evera<br/>Doesn't Try to Change You.",
         desc: 'If it has any value, it is perhaps just to help you see more clearly: who you already are, and who you are becoming.',
         cta: 'Enter Your Space',
         notice: "We're crafting this private space right now — stay tuned.",
