@@ -20,7 +20,8 @@ import type {
 } from '@/types'
 import { t } from '@/i18n'
 
-const API_BASE = '/api'
+// 生产环境使用环境变量配置的 API 地址，开发环境使用代理
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 const TOKEN_KEY = 'secondme_token'
 
 class ApiService {
