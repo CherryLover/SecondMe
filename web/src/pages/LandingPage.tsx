@@ -321,12 +321,12 @@ export default function LandingPage() {
             <div className="mt-6 w-full flex justify-center">
               <div
                 aria-hidden={!ctaNoticeVisible}
-                className={`flex max-w-md items-center gap-3 rounded-sm border border-white/40 dark:border-white/10 bg-white/70 dark:bg-darkPaper/60 px-4 py-3 text-xs md:text-sm text-ink/80 dark:text-darkInk/90 tracking-wide uppercase transition-all duration-500 ease-out ${
+                className={`flex max-w-md flex-col items-center text-center gap-3 rounded-sm border border-white/40 dark:border-white/10 bg-white/70 dark:bg-darkPaper/60 px-6 py-4 text-xs md:text-sm text-ink/80 dark:text-darkInk/90 leading-relaxed whitespace-pre-line transition-all duration-500 ease-out ${
                   ctaNoticeVisible ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 translate-y-4'
                 }`}
               >
                 <span className="h-2 w-2 rounded-full bg-accent dark:bg-darkAccent animate-pulse" />
-                {footer.notice}
+                <p className="font-light whitespace-pre-line">{footer.notice}</p>
               </div>
             </div>
 
