@@ -133,4 +133,4 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
             sleep 10
-            curl -sf http://localhost:8060/api/settings || echo 'Health check failed, please check logs'
+            curl -sf http://localhost:8060/health || echo 'Health check failed, please check logs'

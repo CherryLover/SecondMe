@@ -184,6 +184,14 @@ async def log_requests(request: Request, call_next):
 logger.info("SecondMe API 服务启动")
 
 
+# ==================== Health Check ====================
+
+@app.get("/health")
+def health_check():
+    """健康检查端点（无需认证）"""
+    return {"status": "ok"}
+
+
 # ==================== Auth ====================
 
 @app.post("/api/auth/register", response_model=TokenResponse)
