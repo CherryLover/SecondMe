@@ -99,7 +99,7 @@ jobs:
             docker compose pull
 
             # 重启服务
-            docker compose up -d
+            docker compose up -d --force-recreate
 
             # 清理旧镜像
             docker image prune -f
@@ -116,4 +116,4 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
             sleep 10
-            curl -sf http://localhost:8060/api/settings || echo 'Health check failed, please check logs'
+            curl -sf http://localhost:8060/health || echo 'Health check failed, please check logs'
