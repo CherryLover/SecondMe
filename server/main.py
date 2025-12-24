@@ -421,6 +421,11 @@ def send_message(topic_id: str, body: MessageCreate, current_user: dict = Depend
 
     user_id = current_user["user_id"]
 
+    # 获取话题
+    topic = database.get_topic(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
     # 判断是否是 Flowmo 话题
     is_flowmo_topic = bool(topic.get("is_flowmo", 0))
 
@@ -544,6 +549,11 @@ async def send_message_stream(topic_id: str, body: MessageCreate, current_user: 
         raise HTTPException(status_code=403, detail="Access denied")
 
     user_id = current_user["user_id"]
+
+    # 获取话题
+    topic = database.get_topic(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
 
     # 判断是否是 Flowmo 话题
     is_flowmo_topic = bool(topic.get("is_flowmo", 0))
