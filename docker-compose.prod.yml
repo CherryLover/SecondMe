@@ -17,6 +17,7 @@ services:
       - .env
     environment:
       - TZ=Asia/Shanghai
+      - CORS_ORIGINS=https://evera.ismore.app,http://localhost:5173,https://evera-api.ismore.app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8060/health"]
       interval: 30s

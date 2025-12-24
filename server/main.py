@@ -134,7 +134,7 @@ app = FastAPI(title="SecondMe API", version="1.2.0", lifespan=lifespan)
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

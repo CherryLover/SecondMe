@@ -23,6 +23,9 @@ DATA_DIR.mkdir(exist_ok=True)
 SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 
+# CORS 配置
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+
 # 默认 Provider 配置（从 .env 读取）
 DEFAULT_PROVIDER_NAME = os.getenv("DEFAULT_PROVIDER_NAME")
 DEFAULT_PROVIDER_BASE_URL = os.getenv("DEFAULT_PROVIDER_BASE_URL")
