@@ -22,6 +22,7 @@ export function ChatMessages({
   }, [messages, streamingContent])
 
   const formatContent = (content: string) => {
+    if (!content) return ''
     // Basic markdown transforms: code blocks, bold, italics
     let html = content
       // Code blocks
@@ -61,12 +62,11 @@ export function ChatMessages({
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6">
       <div className="max-w-3xl mx-auto space-y-6">
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <div
-            key={message.id}
-            className={`flex gap-4 ${
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+            key={message.id || index}
+            className={`flex gap-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
           >
             {message.role === 'assistant' && (
               <div className="w-8 h-8 rounded-full bg-accent/10 dark:bg-darkAccent/10 flex items-center justify-center shrink-0">
@@ -74,11 +74,10 @@ export function ChatMessages({
               </div>
             )}
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                message.role === 'user'
-                  ? 'bg-accent dark:bg-darkAccent text-white'
-                  : 'bg-white dark:bg-white/5 text-ink dark:text-darkInk'
-              }`}
+              className={`max-w-[80%] rounded-2xl px-4 py-3 ${message.role === 'user'
+                ? 'bg-accent dark:bg-darkAccent text-white'
+                : 'bg-white dark:bg-white/5 text-ink dark:text-darkInk'
+                }`}
             >
               <div
                 className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
@@ -87,11 +86,10 @@ export function ChatMessages({
                 }}
               />
               <div
-                className={`text-xs mt-2 ${
-                  message.role === 'user'
-                    ? 'text-white/60'
-                    : 'text-muted dark:text-muted/60'
-                }`}
+                className={`text-xs mt-2 ${message.role === 'user'
+                  ? 'text-white/60'
+                  : 'text-muted dark:text-muted/60'
+                  }`}
               >
                 {new Date(message.created_at).toLocaleTimeString(
                   language === 'zh' ? 'zh-CN' : 'en-US',

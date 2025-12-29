@@ -101,23 +101,16 @@ export default function ChatPage() {
           setIsStreaming(false)
           setStreamingContent('')
           // Append the assistant message once streaming is done
-          const aiMessage: Message = {
-            id: data.message_id,
-            topic_id: topicId!,
-            role: 'assistant',
-            content: data.full_content,
-            created_at: new Date().toISOString(),
-          }
-          // Update the temporary user message id
+          const aiMessage = data.message
+          // Update the temporary user message id (currently not returned in done event, skipping)
           setMessages((prev) => {
-            const updated = prev.map((m) =>
-              m.id === userMessage.id ? { ...m, id: data.user_message_id } : m
-            )
-            return [...updated, aiMessage]
+            // We keep the temp id for user message for now as backend doesn't return it in done event
+            //Ideally api.ts should handle 'user_message' event to update the id
+            return [...prev, aiMessage]
           })
           // Update topic title if backend renamed it
-          if (data.topic_title && currentTopic) {
-            setCurrentTopic({ ...currentTopic, title: data.topic_title })
+          if (data.topic_title_updated && data.new_title && currentTopic) {
+            setCurrentTopic({ ...currentTopic, title: data.new_title })
           }
         },
         // onError
@@ -161,9 +154,8 @@ export default function ChatPage() {
 
       {/* Sidebar */}
       <div
-        className={`fixed md:relative z-50 h-full transition-transform duration-300 ${
-          showMobileSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
+        className={`fixed md:relative z-50 h-full transition-transform duration-300 ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          }`}
       >
         <Sidebar
           currentTopicId={currentTopic?.id ?? null}
