@@ -13,6 +13,7 @@ import type {
   MemoriesResponse,
   FlowmosResponse,
   ProvidersResponse,
+  ModelsResponse,
   InviteCodesResponse,
   UsersResponse,
   DeleteCountResponse,
@@ -364,6 +365,13 @@ class ApiService {
       headers: this.getHeaders(false),
     })
     await this.handleResponse(response)
+  }
+
+  async getProviderModels(id: string): Promise<ModelsResponse> {
+    const response = await fetch(`${API_BASE}/providers/${id}/models`, {
+      headers: this.getHeaders(false),
+    })
+    return this.handleResponse<ModelsResponse>(response)
   }
 
   // ==================== Admin ====================

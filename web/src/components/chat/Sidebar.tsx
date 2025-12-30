@@ -13,7 +13,7 @@ import {
   LogOut,
   Sun,
   Moon,
-  Brain,
+  // Brain,
   Sparkles,
   ChevronLeft,
   ChevronRight,
@@ -186,14 +186,21 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* New Chat Button */}
-      <div className="p-3">
+      {/* Action Buttons */}
+      <div className="p-3 flex gap-2">
         <button
           onClick={onNewTopic}
-          className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 dark:bg-darkAccent/10 hover:bg-accent/20 dark:hover:bg-darkAccent/20 text-accent dark:text-darkAccent transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-accent/10 dark:bg-darkAccent/10 hover:bg-accent/20 dark:hover:bg-darkAccent/20 text-accent dark:text-darkAccent transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm font-medium">{t('sidebar.actions.newChat')}</span>
+        </button>
+        <button
+          onClick={() => navigate('/app/flowmo')}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-accent/10 dark:bg-darkAccent/10 hover:bg-accent/20 dark:hover:bg-darkAccent/20 text-accent dark:text-darkAccent transition-colors"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span className="text-sm font-medium">{t('sidebar.quickLinks.flowmo')}</span>
         </button>
       </div>
 
@@ -215,11 +222,10 @@ export function Sidebar({
               <div
                 key={topic.id}
                 onClick={() => onSelectTopic(topic)}
-                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
-                  currentTopicId === topic.id
-                    ? 'bg-white dark:bg-white/10'
-                    : 'hover:bg-white/50 dark:hover:bg-white/5'
-                }`}
+                className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${currentTopicId === topic.id
+                  ? 'bg-white dark:bg-white/10'
+                  : 'hover:bg-white/50 dark:hover:bg-white/5'
+                  }`}
               >
                 <MessageSquare className="w-4 h-4 text-subInk dark:text-darkSubInk shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -279,8 +285,8 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Quick Links */}
-      <div className="px-2 py-2 border-t border-muted/10 dark:border-white/5">
+      {/* Quick Links - Removed as Flowmo is now at top */}
+      {/* <div className="px-2 py-2 border-t border-muted/10 dark:border-white/5">
         <button
           onClick={() => navigate('/app/memories')}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk transition-colors"
@@ -288,14 +294,7 @@ export function Sidebar({
           <Brain className="w-4 h-4" />
           <span className="text-sm">{t('sidebar.quickLinks.memories')}</span>
         </button>
-        <button
-          onClick={() => navigate('/app/flowmo')}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/5 text-subInk dark:text-darkSubInk transition-colors"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span className="text-sm">{t('sidebar.quickLinks.flowmo')}</span>
-        </button>
-      </div>
+      </div> */}
 
       {/* Footer */}
       <div className="p-3 border-t border-muted/10 dark:border-white/5">

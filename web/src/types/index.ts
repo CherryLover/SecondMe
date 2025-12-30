@@ -94,11 +94,10 @@ export interface InviteCode {
 // Stream completion data
 export interface StreamDoneData {
   type: 'done'
-  message_id: string
-  user_message_id: string
-  full_content: string
-  topic_title?: string
-  topic_title_updated?: boolean
+  message: Message
+  memories_used: string[]
+  topic_title_updated: boolean
+  new_title?: string
 }
 
 // Auth response
@@ -127,6 +126,16 @@ export interface FlowmosResponse {
 
 export interface ProvidersResponse {
   providers: Provider[]
+}
+
+// Model info
+export interface ModelInfo {
+  id: string
+  name: string
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[]
 }
 
 export interface InviteCodesResponse {

@@ -6,6 +6,7 @@ import { api } from '@/services/api'
 import type { Provider, ProviderInput, Settings } from '@/types'
 import { ProviderList } from '@/components/settings/ProviderList'
 import { ProviderModal } from '@/components/settings/ProviderModal'
+import { ModelSelector } from '@/components/settings/ModelSelector'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -17,6 +18,7 @@ import {
   Moon,
   Sun,
   Key,
+  MessageSquare,
 } from 'lucide-react'
 import { useI18n } from '@/contexts/I18nContext'
 
@@ -272,6 +274,102 @@ export default function SettingsPage() {
                 onDelete={handleDeleteProvider}
               />
             </section>
+
+            {/* Model configuration */}
+            {settings && (
+              <section className="bg-white dark:bg-white/5 rounded-xl p-6 border border-muted/10 dark:border-white/5">
+                <div className="flex items-center gap-3 mb-4">
+                  <MessageSquare className="w-5 h-5 text-accent dark:text-darkAccent" />
+                  <h2 className="font-medium text-ink dark:text-darkInk">{t('settings.modelConfig.title')}</h2>
+                </div>
+
+                <div className="space-y-4 max-w-2xl">
+                  {/* Chat model */}
+                  <div>
+                    <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
+                      {t('settings.modelConfig.chatModel')}
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={settings.default_chat_provider_id || ''}
+                        onChange={(e) => {
+                          const providerId = e.target.value || null
+                          handleUpdateSettings({
+                            default_chat_provider_id: providerId,
+                            default_chat_model: null,
+                          })
+                        }}
+                        className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-muted/20 dark:border-white/10 rounded-lg text-ink dark:text-darkInk outline-none focus:border-accent/30 dark:focus:border-darkAccent/30 w-40"
+                      >
+                        <option value="">{t('settings.modelConfig.selectProvider')}</option>
+                        {providers.filter(p => p.enabled).map(provider => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ModelSelector
+                        providers={providers}
+                        selectedProviderId={settings.default_chat_provider_id}
+                        selectedModel={settings.default_chat_model}
+                        onSelect={(providerId, model) =>
+                          handleUpdateSettings({
+                            default_chat_provider_id: providerId,
+                            default_chat_model: model,
+                          })
+                        }
+                        mode="chat"
+                      />
+                    </div>
+                    <p className="text-xs text-muted dark:text-muted/60 mt-1">
+                      {t('settings.modelConfig.chatModelDesc')}
+                    </p>
+                  </div>
+
+                  {/* Embedding model */}
+                  <div>
+                    <label className="text-sm text-ink dark:text-darkInk block mb-1.5">
+                      {t('settings.modelConfig.embeddingModel')}
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={settings.embedding_provider_id || ''}
+                        onChange={(e) => {
+                          const providerId = e.target.value || null
+                          handleUpdateSettings({
+                            embedding_provider_id: providerId,
+                            embedding_model: null,
+                          })
+                        }}
+                        className="px-3 py-2 text-sm bg-white dark:bg-white/5 border border-muted/20 dark:border-white/10 rounded-lg text-ink dark:text-darkInk outline-none focus:border-accent/30 dark:focus:border-darkAccent/30 w-40"
+                      >
+                        <option value="">{t('settings.modelConfig.selectProvider')}</option>
+                        {providers.filter(p => p.enabled).map(provider => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ModelSelector
+                        providers={providers}
+                        selectedProviderId={settings.embedding_provider_id}
+                        selectedModel={settings.embedding_model}
+                        onSelect={(providerId, model) =>
+                          handleUpdateSettings({
+                            embedding_provider_id: providerId,
+                            embedding_model: model,
+                          })
+                        }
+                        mode="embedding"
+                      />
+                    </div>
+                    <p className="text-xs text-muted dark:text-muted/60 mt-1">
+                      {t('settings.modelConfig.embeddingModelDesc')}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Memory settings */}
             {settings && (
