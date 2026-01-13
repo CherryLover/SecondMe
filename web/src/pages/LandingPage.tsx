@@ -9,7 +9,7 @@ import { FadeIn } from '@/components/landing/FadeIn'
 import { Logo } from '@/components/common/Logo'
 import type { AppMessages } from '@/i18n/translations'
 
-const CTA_NAV_ENABLED = false
+const CTA_NAV_ENABLED = true
 
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -41,20 +41,20 @@ export default function LandingPage() {
   }, [])
 
   const handleCTA = () => {
-    setCtaNoticeVisible(true)
-    if (ctaNoticeTimer.current) {
-      window.clearTimeout(ctaNoticeTimer.current)
-    }
-    ctaNoticeTimer.current = window.setTimeout(() => {
-      setCtaNoticeVisible(false)
-    }, 4000)
-
     if (CTA_NAV_ENABLED) {
       if (user) {
         navigate('/app')
       } else {
         navigate('/login')
       }
+    } else {
+      setCtaNoticeVisible(true)
+      if (ctaNoticeTimer.current) {
+        window.clearTimeout(ctaNoticeTimer.current)
+      }
+      ctaNoticeTimer.current = window.setTimeout(() => {
+        setCtaNoticeVisible(false)
+      }, 4000)
     }
   }
 

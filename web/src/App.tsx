@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { I18nProvider } from '@/contexts/I18nContext'
+import { PWAUpdatePrompt } from '@/components/common/PWAUpdatePrompt'
 import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/LoginPage'
 import ChatPage from '@/pages/ChatPage'
@@ -25,6 +26,7 @@ function App() {
               <Route path="/app/settings" element={<SettingsPage />} />
               <Route path="/app/admin" element={<AdminPage />} />
             </Routes>
+            <PWAUpdatePrompt />
           </AuthProvider>
         </ThemeProvider>
       </I18nProvider>
