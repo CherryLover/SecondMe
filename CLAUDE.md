@@ -294,3 +294,156 @@ DEFAULT_MEMORY_TOP_K=5
 - **设计文档是开发依据**：先写文档再写代码
 - **每个阶段与用户确认**：避免返工
 - **发布前必须自测**：确保功能符合预期
+
+## 本地开发与部署
+
+### 部署架构
+
+**本地开发环境通过 Cloudflare Tunnel 暴露到公网：**
+
+```
+手机/外部设备
+    ↓
+Cloudflare Tunnel (secondme.flyooo.uk)
+    ↓
+本地 localhost:8060 (后端 FastAPI)
+    ↓
+托管 web/dist (前端静态文件)
+```
+
+### Cloudflare Tunnel 配置
+
+**配置文件位置**: `~/.cloudflared/config.yml`
+
+```yaml
+tunnel: hapi-tunnel
+credentials-file: /Users/jiangjiwei/.cloudflared/xxx.json
+
+ingress:
+  - hostname: hapi.flyooo.uk
+    service: http://localhost:3006
+  - hostname: secondme.flyooo.uk
+    service: http://localhost:8060  # 指向后端端口
+  - service: http_status:404
+```
+
+### 端口说明
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| 后端服务 | 8060 | FastAPI 服务，托管前端构建文件 |
+| 前端开发 | 5173/5174 | Vite 开发服务器（仅本地） |
+| 前端预览 | 4173 | Vite 生产预览（仅本地测试） |
+
+**重要**：Cloudflare Tunnel 转发到 8060 端口（后端），后端托管前端静态文件。
+
+### 本地开发流程
+
+#### 1. 启动后端服务
+```bash
+cd server
+python main.py
+# 后端启动在 0.0.0.0:8060
+# 自动托管 web/dist 目录的前端文件
+```
+
+#### 2. 前端开发（两种模式）
+
+**开发模式（热更新）：**
+```bash
+cd web
+npm run dev
+# 访问 http://localhost:5173
+# 仅用于本地开发，有热更新
+```
+
+**生产模式（测试部署）：**
+```bash
+cd web
+npm run build          # 构建到 dist 目录
+# 后端自动托管 dist，无需额外操作
+# 访问 http://localhost:8060 或 https://secondme.flyooo.uk
+```
+
+### PWA 更新机制
+
+**更新流程：**
+1. 修改前端代码
+2. `npm run build` 重新构建
+3. 重启后端服务（让其重新加载 dist 文件）
+4. Service Worker 每 10 秒检查更新
+5. 检测到新版本后 2 秒自动刷新
+
+**重启后端：**
+```bash
+# 查找并停止旧进程
+lsof -ti:8060 | xargs kill
+
+# 启动新进程
+cd server && python main.py
+```
+
+### PWA 缓存问题排查
+
+**问题：手机浏览器能看到最新版本，但 PWA 应用显示旧版本**
+
+**原因**：已安装的 PWA 有独立的 Service Worker 缓存。
+
+**解决方案：**
+
+1. **首次安装后**：卸载重装一次 PWA 应用
+   - 长按桌面图标 → 卸载
+   - 浏览器访问网站 → 重新添加到主屏幕
+
+2. **后续更新**：自动更新机制
+   - PWA 每 10 秒检查更新
+   - 检测到新版本显示提示："发现新版本，2秒后自动刷新..."
+   - 2 秒后自动刷新应用
+
+3. **强制清除缓存（备用方案）**
+   - Android: 设置 → 应用 → Evera → 存储 → 清除缓存
+   - iOS: 卸载重装
+
+### 常见问题
+
+#### 1. 修改代码后手机看不到更新
+**原因**：忘记重启后端或清除 PWA 缓存
+**解决**：
+```bash
+# 1. 重新构建前端
+cd web && npm run build
+
+# 2. 重启后端
+lsof -ti:8060 | xargs kill && cd server && python main.py
+
+# 3. 等待 10-20 秒，PWA 自动检测更新
+```
+
+#### 2. Cloudflare Tunnel 断开
+**原因**：tunnel 进程意外停止
+**解决**：
+```bash
+# 重启 cloudflared
+cloudflared tunnel run hapi-tunnel
+```
+
+#### 3. 端口被占用
+```bash
+# 查看占用端口的进程
+lsof -ti:8060
+
+# 杀死进程
+kill <PID>
+```
+
+### 部署检查清单
+
+部署新版本时的检查步骤：
+
+- [ ] 前端代码修改完成
+- [ ] `npm run build` 构建成功
+- [ ] 重启后端服务（`lsof -ti:8060 | xargs kill && python main.py`）
+- [ ] 浏览器无痕模式访问，确认更新生效
+- [ ] 手机 PWA 等待 10-20 秒，确认自动更新
+- [ ] 提交代码 `git add . && git commit`
+- [ ] 推送到远程 `git push`
