@@ -149,3 +149,70 @@ export interface UsersResponse {
 export interface DeleteCountResponse {
   deleted_count: number
 }
+
+// TODO
+export interface Todo {
+  id: string
+  user_id: string
+  parent_id: string | null
+  title: string
+  description: string | null
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  priority: number
+  group_name: string | null
+  deadline: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  children: Todo[]
+}
+
+export interface TodoCreate {
+  title: string
+  description?: string
+  priority?: number
+  group_name?: string
+  deadline?: string
+  parent_id?: string
+}
+
+export interface TodoUpdate {
+  title?: string
+  description?: string
+  status?: string
+  priority?: number
+  group_name?: string
+  deadline?: string
+  parent_id?: string
+}
+
+export interface TodosResponse {
+  todos: Todo[]
+}
+
+export interface TodoGroup {
+  name: string
+  count: number
+}
+
+export interface TodoGroupsResponse {
+  groups: TodoGroup[]
+}
+
+// API Token
+export interface ApiToken {
+  id: string
+  name: string
+  token?: string  // 只在创建时返回
+  token_preview: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface ApiTokenCreate {
+  name: string
+}
+
+export interface ApiTokensResponse {
+  tokens: ApiToken[]
+}

@@ -18,6 +18,15 @@ import type {
   UsersResponse,
   DeleteCountResponse,
   StreamDoneData,
+  Todo,
+  TodoCreate,
+  TodoUpdate,
+  TodosResponse,
+  TodoGroup,
+  TodoGroupsResponse,
+  ApiToken,
+  ApiTokenCreate,
+  ApiTokensResponse,
 } from '@/types'
 import { t } from '@/i18n'
 
@@ -413,6 +422,109 @@ class ApiService {
 
   async deleteUser(id: string): Promise<void> {
     const response = await fetch(`${API_BASE}/admin/users/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(false),
+    })
+    await this.handleResponse(response)
+  }
+
+  // ==================== TODO 管理 ====================
+
+  async getTodos(params?: {
+    status?: string
+    group?: string
+    parent_id?: string | null
+    include_children?: boolean
+  }): Promise<Todo[]> {
+    const queryParams = new URLSearchParams()
+    if (params?.status) queryParams.append('status', params.status)
+    if (params?.group) queryParams.append('group', params.group)
+    if (params?.parent_id !== undefined) {
+      queryParams.append('parent_id', params.parent_id === null ? 'null' : params.parent_id)
+    }
+    if (params?.include_children !== undefined) {
+      queryParams.append('include_children', params.include_children.toString())
+    }
+
+    const url = `${API_BASE}/todos${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    const response = await fetch(url, {
+      headers: this.getHeaders(false),
+    })
+    const data = await this.handleResponse<TodosResponse>(response)
+    return data.todos
+  }
+
+  async getTodo(id: string): Promise<Todo> {
+    const response = await fetch(`${API_BASE}/todos/${id}`, {
+      headers: this.getHeaders(false),
+    })
+    return this.handleResponse<Todo>(response)
+  }
+
+  async createTodo(data: TodoCreate): Promise<Todo> {
+    const response = await fetch(`${API_BASE}/todos`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse<Todo>(response)
+  }
+
+  async updateTodo(id: string, data: TodoUpdate): Promise<Todo> {
+    const response = await fetch(`${API_BASE}/todos/${id}`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return this.handleResponse<Todo>(response)
+  }
+
+  async batchUpdateTodos(ids: string[], status: string): Promise<{ updated_count: number; todos: Todo[] }> {
+    const response = await fetch(`${API_BASE}/todos/batch`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ ids, status }),
+    })
+    return this.handleResponse<{ updated_count: number; todos: Todo[] }>(response)
+  }
+
+  async deleteTodo(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/todos/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(false),
+    })
+    await this.handleResponse(response)
+  }
+
+  async getTodoGroups(): Promise<TodoGroup[]> {
+    const response = await fetch(`${API_BASE}/todos/groups`, {
+      headers: this.getHeaders(false),
+    })
+    const data = await this.handleResponse<TodoGroupsResponse>(response)
+    return data.groups
+  }
+
+  // ==================== API Token 管理 ====================
+
+  async getApiTokens(): Promise<ApiToken[]> {
+    const response = await fetch(`${API_BASE}/tokens`, {
+      headers: this.getHeaders(false),
+    })
+    const data = await this.handleResponse<ApiTokensResponse>(response)
+    return data.tokens
+  }
+
+  async createApiToken(name: string): Promise<ApiToken> {
+    const response = await fetch(`${API_BASE}/tokens`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ name }),
+    })
+    return this.handleResponse<ApiToken>(response)
+  }
+
+  async deleteApiToken(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/tokens/${id}`, {
       method: 'DELETE',
       headers: this.getHeaders(false),
     })
