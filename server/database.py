@@ -195,6 +195,39 @@ def init_database():
             )
         """)
 
+        # 创建 TODO 表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS todos (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                parent_id TEXT,
+                title TEXT NOT NULL,
+                description TEXT,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+                priority INTEGER DEFAULT 3 CHECK(priority >= 1 AND priority <= 5),
+                group_name TEXT,
+                deadline TIMESTAMP,
+                completed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (parent_id) REFERENCES todos(id) ON DELETE CASCADE
+            )
+        """)
+
+        # 创建 API Tokens 表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
         # 数据库迁移：为已有表添加新字段
         _migrate_database(cursor)
 
@@ -214,6 +247,12 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_flowmos_user_id ON flowmos(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes(code)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_todos_parent_id ON todos(parent_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_todos_user_status ON todos(user_id, status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_todos_deadline ON todos(deadline) WHERE deadline IS NOT NULL")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_token ON api_tokens(token)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens(user_id)")
 
 
 # ==================== Topics ====================
@@ -1016,3 +1055,406 @@ def get_latest_flowmo_time(topic_id: str) -> Optional[str]:
             (topic_id,)
         ).fetchone()
     return row["created_at"] if row else None
+
+
+# ==================== TODOs ====================
+
+def create_todo(
+    user_id: str,
+    title: str,
+    description: Optional[str] = None,
+    priority: int = 3,
+    group_name: Optional[str] = None,
+    deadline: Optional[str] = None,
+    parent_id: Optional[str] = None
+) -> dict:
+    """创建任务"""
+    todo_id = str(uuid4())
+    now = datetime.now().isoformat()
+
+    # 验证优先级范围
+    if not (1 <= priority <= 5):
+        priority = 3
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO todos (id, user_id, parent_id, title, description, priority, group_name, deadline, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (todo_id, user_id, parent_id, title, description, priority, group_name, deadline, now, now)
+        )
+
+    return {
+        "id": todo_id,
+        "user_id": user_id,
+        "parent_id": parent_id,
+        "title": title,
+        "description": description,
+        "status": "pending",
+        "priority": priority,
+        "group_name": group_name,
+        "deadline": deadline,
+        "completed_at": None,
+        "created_at": now,
+        "updated_at": now
+    }
+
+
+def get_todo(todo_id: str) -> Optional[dict]:
+    """获取单个任务"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM todos WHERE id = ?", (todo_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def verify_todo_owner(todo_id: str, user_id: str) -> bool:
+    """验证任务是否属于指定用户"""
+    todo = get_todo(todo_id)
+    return todo is not None and todo.get("user_id") == user_id
+
+
+def get_todos(
+    user_id: str,
+    status: Optional[str] = None,
+    group: Optional[str] = None,
+    parent_id: Optional[str] = None,
+    include_children: bool = True
+) -> list[dict]:
+    """获取任务列表
+
+    Args:
+        user_id: 用户ID
+        status: 筛选状态
+        group: 筛选分组
+        parent_id: 筛选父任务（None 表示只返回顶层任务）
+        include_children: 是否包含子任务
+    """
+    with get_db() as conn:
+        # 构建查询条件
+        conditions = ["user_id = ?"]
+        params = [user_id]
+
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+
+        if group:
+            conditions.append("group_name = ?")
+            params.append(group)
+
+        # parent_id 为 None 时，只返回顶层任务
+        if parent_id is None:
+            conditions.append("parent_id IS NULL")
+        elif parent_id:  # 如果指定了 parent_id，筛选子任务
+            conditions.append("parent_id = ?")
+            params.append(parent_id)
+
+        where_clause = " AND ".join(conditions)
+
+        rows = conn.execute(
+            f"SELECT * FROM todos WHERE {where_clause} ORDER BY priority DESC, created_at ASC",
+            params
+        ).fetchall()
+
+    todos = [dict(row) for row in rows]
+
+    # 如果包含子任务，递归获取
+    if include_children:
+        for todo in todos:
+            todo["children"] = _get_todo_children(todo["id"])
+    else:
+        for todo in todos:
+            todo["children"] = []
+
+    return todos
+
+
+def _get_todo_children(parent_id: str) -> list[dict]:
+    """递归获取子任务"""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM todos WHERE parent_id = ? ORDER BY priority DESC, created_at ASC",
+            (parent_id,)
+        ).fetchall()
+
+    children = []
+    for row in rows:
+        child = dict(row)
+        # 递归获取子子任务（虽然限制只有 2 层，但代码支持递归）
+        child["children"] = _get_todo_children(child["id"])
+        children.append(child)
+
+    return children
+
+
+def update_todo(
+    todo_id: str,
+    user_id: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    status: Optional[str] = None,
+    priority: Optional[int] = None,
+    group_name: Optional[str] = None,
+    deadline: Optional[str] = None,
+    parent_id: Optional[str] = None
+) -> Optional[dict]:
+    """更新任务
+
+    特殊逻辑：
+    1. 如果状态变为 completed，设置 completed_at 并完成所有子任务
+    2. 如果 parent_id 变化，验证层级限制
+    """
+    # 验证所有权
+    if not verify_todo_owner(todo_id, user_id):
+        return None
+
+    todo = get_todo(todo_id)
+    if not todo:
+        return None
+
+    now = datetime.now().isoformat()
+    updates = {"updated_at": now}
+
+    # 更新字段
+    if title is not None:
+        updates["title"] = title
+    if description is not None:
+        updates["description"] = description
+    if priority is not None:
+        if 1 <= priority <= 5:
+            updates["priority"] = priority
+    if group_name is not None:
+        updates["group_name"] = group_name
+    if deadline is not None:
+        updates["deadline"] = deadline
+
+    # 处理状态变化
+    if status is not None and status != todo["status"]:
+        updates["status"] = status
+        # 如果从非完成状态变为完成状态
+        if status == "completed" and todo["status"] != "completed":
+            updates["completed_at"] = now
+            # 完成所有子任务
+            _complete_todo_children(todo_id)
+        # 如果从完成状态变为其他状态，清除完成时间
+        elif status != "completed":
+            updates["completed_at"] = None
+
+    # 处理 parent_id 变化
+    if parent_id is not None and parent_id != todo.get("parent_id"):
+        # 检查是否有子任务（有子任务不能转为子任务）
+        if _has_children(todo_id):
+            raise ValueError("该任务有子任务，不能转为子任务")
+
+        # 如果设置了新的 parent_id，验证新父任务是否已有父任务
+        if parent_id:
+            parent_todo = get_todo(parent_id)
+            if not parent_todo:
+                raise ValueError("父任务不存在")
+            if parent_todo.get("parent_id"):
+                raise ValueError("父任务已经是子任务，不能超过 2 层嵌套")
+
+        updates["parent_id"] = parent_id
+
+    # 执行更新
+    set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+    values = list(updates.values()) + [todo_id]
+
+    with get_db() as conn:
+        conn.execute(
+            f"UPDATE todos SET {set_clause} WHERE id = ?",
+            values
+        )
+
+    return get_todo(todo_id)
+
+
+def _has_children(todo_id: str) -> bool:
+    """检查任务是否有子任务"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) as count FROM todos WHERE parent_id = ?",
+            (todo_id,)
+        ).fetchone()
+    return row["count"] > 0
+
+
+def _complete_todo_children(parent_id: str):
+    """递归完成所有子任务"""
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        # 获取所有子任务
+        rows = conn.execute(
+            "SELECT id FROM todos WHERE parent_id = ?",
+            (parent_id,)
+        ).fetchall()
+
+        for row in rows:
+            child_id = row["id"]
+            # 更新子任务状态
+            conn.execute(
+                "UPDATE todos SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, child_id)
+            )
+            # 递归完成子子任务
+            _complete_todo_children(child_id)
+
+
+def batch_update_todos(todo_ids: list[str], user_id: str, status: str) -> int:
+    """批量更新任务状态
+
+    Returns:
+        更新的任务数量
+    """
+    if not todo_ids:
+        return 0
+
+    now = datetime.now().isoformat()
+    count = 0
+
+    for todo_id in todo_ids:
+        if verify_todo_owner(todo_id, user_id):
+            todo = get_todo(todo_id)
+            if todo:
+                with get_db() as conn:
+                    if status == "completed":
+                        conn.execute(
+                            "UPDATE todos SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?",
+                            (status, now, now, todo_id)
+                        )
+                        # 完成所有子任务
+                        _complete_todo_children(todo_id)
+                    else:
+                        conn.execute(
+                            "UPDATE todos SET status = ?, updated_at = ? WHERE id = ?",
+                            (status, now, todo_id)
+                        )
+                count += 1
+
+    return count
+
+
+def delete_todo(todo_id: str, user_id: str) -> bool:
+    """删除任务（级联删除所有子任务）"""
+    # 验证所有权
+    if not verify_todo_owner(todo_id, user_id):
+        return False
+
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    return cursor.rowcount > 0
+
+
+def get_todo_groups(user_id: str) -> list[dict]:
+    """获取用户的任务分组列表"""
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT group_name, COUNT(*) as count
+               FROM todos
+               WHERE user_id = ? AND group_name IS NOT NULL
+               GROUP BY group_name
+               ORDER BY count DESC, group_name ASC""",
+            (user_id,)
+        ).fetchall()
+    return [{"name": row["group_name"], "count": row["count"]} for row in rows]
+
+
+# ==================== API Tokens ====================
+
+def create_api_token(user_id: str, name: str) -> dict:
+    """创建 API Token
+
+    Token 格式：smt_ + 32 字节随机字符串
+    """
+    import secrets
+
+    token_id = str(uuid4())
+    # 生成 Token：smt_ 前缀 + 32 字节随机字符串
+    token = f"smt_{secrets.token_urlsafe(32)}"
+    now = datetime.now().isoformat()
+
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO api_tokens (id, user_id, name, token, created_at) VALUES (?, ?, ?, ?, ?)",
+            (token_id, user_id, name, token, now)
+        )
+
+    return {
+        "id": token_id,
+        "user_id": user_id,
+        "name": name,
+        "token": token,  # 完整 Token，只在创建时返回
+        "token_preview": f"{token[:10]}...{token[-4:]}",
+        "created_at": now,
+        "last_used_at": None
+    }
+
+
+def get_api_tokens(user_id: str) -> list[dict]:
+    """获取用户的 API Token 列表"""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,)
+        ).fetchall()
+
+    tokens = []
+    for row in rows:
+        token_dict = dict(row)
+        # 生成预览版本（不返回完整 Token）
+        full_token = token_dict["token"]
+        token_dict["token_preview"] = f"{full_token[:10]}...{full_token[-4:]}"
+        del token_dict["token"]  # 删除完整 Token
+        tokens.append(token_dict)
+
+    return tokens
+
+
+def get_api_token_by_token(token: str) -> Optional[dict]:
+    """通过 Token 字符串查询（用于认证）
+
+    Returns:
+        包含 user 信息的字典
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT t.*, u.id as user_id, u.username, u.role
+               FROM api_tokens t
+               JOIN users u ON t.user_id = u.id
+               WHERE t.token = ?""",
+            (token,)
+        ).fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "token_id": row["id"],
+        "user": {
+            "id": row["user_id"],
+            "username": row["username"],
+            "role": row["role"]
+        }
+    }
+
+
+def delete_api_token(token_id: str, user_id: str) -> bool:
+    """删除 API Token"""
+    with get_db() as conn:
+        cursor = conn.execute(
+            "DELETE FROM api_tokens WHERE id = ? AND user_id = ?",
+            (token_id, user_id)
+        )
+    return cursor.rowcount > 0
+
+
+def update_token_last_used(token: str):
+    """更新 Token 最后使用时间"""
+    now = datetime.now().isoformat()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE api_tokens SET last_used_at = ? WHERE token = ?",
+            (now, token)
+        )
