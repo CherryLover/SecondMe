@@ -95,3 +95,47 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin required")
     return current_user
+
+
+def verify_api_token(token: str) -> dict:
+    """验证 API Token，返回用户信息"""
+    import database
+
+    if not token.startswith("smt_"):
+        raise HTTPException(status_code=401, detail="无效的 Token 格式")
+
+    token_data = database.get_api_token_by_token(token)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Token 不存在或已失效")
+
+    # 更新最后使用时间
+    database.update_token_last_used(token)
+
+    return token_data["user"]
+
+
+async def get_current_user_flexible(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> dict:
+    """支持 JWT 和 API Token 两种认证方式"""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="未提供认证信息")
+
+    token = credentials.credentials
+
+    # 判断是 JWT 还是 API Token
+    if token.startswith("smt_"):
+        # API Token 认证
+        user = verify_api_token(token)
+        return {"user_id": user["id"], "role": user["role"]}
+    else:
+        # JWT 认证
+        payload = decode_token(token)
+        return {"user_id": payload["user_id"], "role": payload["role"]}
+
+
+async def require_admin_flexible(current_user: dict = Depends(get_current_user_flexible)) -> dict:
+    """要求管理员权限（支持 JWT 和 API Token）"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin required")
+    return current_user
