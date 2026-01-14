@@ -19,7 +19,8 @@ import ai_client
 import config
 from auth import (
     hash_password, verify_password, create_token,
-    get_current_user, require_admin, check_token_refresh
+    get_current_user, require_admin, check_token_refresh,
+    get_current_user_flexible, require_admin_flexible
 )
 from logger import logger
 from extraction import extraction_task
@@ -32,7 +33,9 @@ from models import (
     SettingsResponse, SettingsUpdate,
     SuccessResponse, ErrorResponse,
     UserRegister, UserLogin, UserResponse, TokenResponse, PasswordUpdate,
-    InviteCodeCreate, InviteCodeResponse, InviteCodesResponse, UsersResponse
+    InviteCodeCreate, InviteCodeResponse, InviteCodesResponse, UsersResponse,
+    TodoCreate, TodoUpdate, TodoResponse, TodosResponse, TodoGroupsResponse, BatchUpdateRequest, BatchUpdateResponse,
+    ApiTokenCreate, ApiTokenResponse, ApiTokensResponse
 )
 
 # 初始化数据库
@@ -1076,6 +1079,199 @@ def _handle_flowmo_record(topic_id: str, user_message: dict, settings: dict, use
 FLOWMO_SYSTEM_PROMPT = """你是一个善于倾听的伙伴。用户在记录自己的想法、情绪或日常。
 请以温和、共情的方式回应，可以简短也可以展开聊聊。
 不要急于给建议，先理解和陪伴。"""
+
+
+# ==================== TODO 管理 ====================
+
+@app.get("/api/todos", response_model=TodosResponse)
+async def get_todos(
+    status: Optional[str] = Query(None, description="筛选状态"),
+    group: Optional[str] = Query(None, description="筛选分组"),
+    parent_id: Optional[str] = Query(None, description="筛选父任务，null 表示只返回顶层任务"),
+    include_children: bool = Query(True, description="是否包含子任务"),
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """获取任务列表"""
+    user_id = current_user["user_id"]
+
+    # 处理 parent_id 参数（字符串 "null" 转为 None）
+    if parent_id == "null":
+        parent_id = None
+
+    todos = database.get_todos(user_id, status=status, group=group, parent_id=parent_id, include_children=include_children)
+    return TodosResponse(todos=todos)
+
+
+@app.get("/api/todos/{todo_id}", response_model=TodoResponse)
+async def get_todo(
+    todo_id: str,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """获取单个任务详情"""
+    user_id = current_user["user_id"]
+
+    # 验证所有权
+    if not database.verify_todo_owner(todo_id, user_id):
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    todo = database.get_todo(todo_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    # 获取子任务
+    todo["children"] = database._get_todo_children(todo_id)
+
+    return TodoResponse(**todo)
+
+
+@app.post("/api/todos", response_model=TodoResponse)
+async def create_todo(
+    todo_data: TodoCreate,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """创建任务"""
+    user_id = current_user["user_id"]
+
+    # 如果指定了 parent_id，验证父任务存在且属于当前用户
+    if todo_data.parent_id:
+        if not database.verify_todo_owner(todo_data.parent_id, user_id):
+            raise HTTPException(status_code=404, detail="父任务不存在")
+
+        # 验证父任务没有父任务（限制 2 层）
+        parent_todo = database.get_todo(todo_data.parent_id)
+        if parent_todo and parent_todo.get("parent_id"):
+            raise HTTPException(status_code=400, detail="不能超过 2 层嵌套")
+
+    todo = database.create_todo(
+        user_id=user_id,
+        title=todo_data.title,
+        description=todo_data.description,
+        priority=todo_data.priority,
+        group_name=todo_data.group_name,
+        deadline=todo_data.deadline,
+        parent_id=todo_data.parent_id
+    )
+
+    todo["children"] = []
+    return TodoResponse(**todo)
+
+
+@app.put("/api/todos/{todo_id}", response_model=TodoResponse)
+async def update_todo(
+    todo_id: str,
+    todo_data: TodoUpdate,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """更新任务"""
+    user_id = current_user["user_id"]
+
+    try:
+        todo = database.update_todo(
+            todo_id=todo_id,
+            user_id=user_id,
+            title=todo_data.title,
+            description=todo_data.description,
+            status=todo_data.status,
+            priority=todo_data.priority,
+            group_name=todo_data.group_name,
+            deadline=todo_data.deadline,
+            parent_id=todo_data.parent_id
+        )
+
+        if not todo:
+            raise HTTPException(status_code=404, detail="任务不存在或无权限")
+
+        # 获取子任务
+        todo["children"] = database._get_todo_children(todo_id)
+
+        return TodoResponse(**todo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/api/todos/batch", response_model=BatchUpdateResponse)
+async def batch_update_todos(
+    batch_data: BatchUpdateRequest,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """批量更新任务状态"""
+    user_id = current_user["user_id"]
+
+    count = database.batch_update_todos(batch_data.ids, user_id, batch_data.status)
+
+    # 获取更新后的任务
+    updated_todos = []
+    for todo_id in batch_data.ids:
+        if database.verify_todo_owner(todo_id, user_id):
+            todo = database.get_todo(todo_id)
+            if todo:
+                todo["children"] = database._get_todo_children(todo_id)
+                updated_todos.append(todo)
+
+    return BatchUpdateResponse(updated_count=count, todos=updated_todos)
+
+
+@app.delete("/api/todos/{todo_id}", response_model=SuccessResponse)
+async def delete_todo(
+    todo_id: str,
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """删除任务（级联删除所有子任务）"""
+    user_id = current_user["user_id"]
+
+    success = database.delete_todo(todo_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="任务不存在或无权限")
+
+    return SuccessResponse()
+
+
+@app.get("/api/todos/groups", response_model=TodoGroupsResponse)
+async def get_todo_groups(
+    current_user: dict = Depends(get_current_user_flexible)
+):
+    """获取任务分组列表"""
+    user_id = current_user["user_id"]
+    groups = database.get_todo_groups(user_id)
+    return TodoGroupsResponse(groups=groups)
+
+
+# ==================== API Token 管理 ====================
+
+@app.get("/api/tokens", response_model=ApiTokensResponse)
+async def get_api_tokens(
+    current_user: dict = Depends(get_current_user)  # 注意：只允许 JWT 访问，不允许 API Token 管理自己
+):
+    """获取 API Token 列表"""
+    user_id = current_user["user_id"]
+    tokens = database.get_api_tokens(user_id)
+    return ApiTokensResponse(tokens=tokens)
+
+
+@app.post("/api/tokens", response_model=ApiTokenResponse)
+async def create_api_token(
+    token_data: ApiTokenCreate,
+    current_user: dict = Depends(get_current_user)  # 注意：只允许 JWT 访问
+):
+    """创建 API Token"""
+    user_id = current_user["user_id"]
+    token = database.create_api_token(user_id, token_data.name)
+    return ApiTokenResponse(**token)
+
+
+@app.delete("/api/tokens/{token_id}", response_model=SuccessResponse)
+async def delete_api_token(
+    token_id: str,
+    current_user: dict = Depends(get_current_user)  # 注意：只允许 JWT 访问
+):
+    """删除 API Token"""
+    user_id = current_user["user_id"]
+
+    success = database.delete_api_token(token_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Token 不存在或无权限")
+
+    return SuccessResponse()
 
 
 # ==================== 静态文件托管 ====================
