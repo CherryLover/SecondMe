@@ -6,7 +6,8 @@ import type { Topic, Message } from '@/types'
 import { Sidebar } from '@/components/chat/Sidebar'
 import { ChatMessages } from '@/components/chat/ChatMessages'
 import { ChatInput } from '@/components/chat/ChatInput'
-import { Menu } from 'lucide-react'
+import { TodoSidebar } from '@/components/todo/TodoSidebar'
+import { Menu, CheckSquare } from 'lucide-react'
 import { useI18n } from '@/contexts/I18nContext'
 
 export default function ChatPage() {
@@ -20,6 +21,7 @@ export default function ChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showMobileSidebar, setShowMobileSidebar] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [showTodoSidebar, setShowTodoSidebar] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -176,9 +178,17 @@ export default function ChatPage() {
           >
             <Menu className="w-5 h-5 text-ink dark:text-darkInk" />
           </button>
-          <span className="text-sm font-medium text-ink dark:text-darkInk truncate">
+          <span className="text-sm font-medium text-ink dark:text-darkInk truncate flex-1">
             {currentTopic?.title || t('chat.newConversation')}
           </span>
+          <button
+            onClick={() => setShowTodoSidebar(!showTodoSidebar)}
+            className={`p-2 rounded-lg hover:bg-muted/10 dark:hover:bg-white/5 ${
+              showTodoSidebar ? 'bg-accent/10 text-accent' : 'text-ink dark:text-darkInk'
+            }`}
+          >
+            <CheckSquare className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Chat area */}
@@ -205,6 +215,24 @@ export default function ChatPage() {
           }
         />
       </div>
+
+      {/* Todo Sidebar */}
+      {showTodoSidebar && (
+        <div className="fixed md:relative inset-y-0 right-0 z-30 md:z-0">
+          <TodoSidebar onClose={() => setShowTodoSidebar(false)} />
+        </div>
+      )}
+
+      {/* Desktop todo toggle button */}
+      {!showTodoSidebar && (
+        <button
+          onClick={() => setShowTodoSidebar(true)}
+          className="hidden md:block fixed right-4 bottom-20 p-3 rounded-full bg-accent text-white shadow-lg hover:bg-accent/90 transition-colors"
+          title="打开任务列表"
+        >
+          <CheckSquare className="w-5 h-5" />
+        </button>
+      )}
     </div>
   )
 }
