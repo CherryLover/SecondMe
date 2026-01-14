@@ -256,3 +256,82 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
+
+
+# ==================== TODO ====================
+
+class TodoCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    priority: int = 3
+    group_name: Optional[str] = None
+    deadline: Optional[str] = None
+    parent_id: Optional[str] = None
+
+
+class TodoUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[int] = None
+    group_name: Optional[str] = None
+    deadline: Optional[str] = None
+    parent_id: Optional[str] = None
+
+
+class TodoResponse(BaseModel):
+    id: str
+    user_id: str
+    parent_id: Optional[str]
+    title: str
+    description: Optional[str]
+    status: str
+    priority: int
+    group_name: Optional[str]
+    deadline: Optional[str]
+    completed_at: Optional[str]
+    created_at: str
+    updated_at: str
+    children: list['TodoResponse'] = []
+
+
+class TodosResponse(BaseModel):
+    todos: list[TodoResponse]
+
+
+class TodoGroupResponse(BaseModel):
+    name: str
+    count: int
+
+
+class TodoGroupsResponse(BaseModel):
+    groups: list[TodoGroupResponse]
+
+
+class BatchUpdateRequest(BaseModel):
+    ids: list[str]
+    status: str
+
+
+class BatchUpdateResponse(BaseModel):
+    updated_count: int
+    todos: list[TodoResponse]
+
+
+# ==================== API Token ====================
+
+class ApiTokenCreate(BaseModel):
+    name: str
+
+
+class ApiTokenResponse(BaseModel):
+    id: str
+    name: str
+    token: Optional[str] = None  # 只在创建时返回
+    token_preview: str
+    created_at: str
+    last_used_at: Optional[str]
+
+
+class ApiTokensResponse(BaseModel):
+    tokens: list[ApiTokenResponse]
