@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { useState } from 'react'
 import { api } from '@/services/api'
 import type { Todo, TodoUpdate } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -30,11 +29,11 @@ export function TodoDetailPanel({ todo, onClose, onUpdate, onDelete }: TodoDetai
       setSaving(true)
       const updateData: TodoUpdate = {
         title,
-        description: description || null,
+        description: description || undefined,
         status,
         priority: parseInt(priority),
-        group_name: groupName || null,
-        deadline: deadline || null,
+        group_name: groupName || undefined,
+        deadline: deadline || undefined,
       }
       await api.updateTodo(todo.id, updateData)
       onUpdate()
@@ -71,7 +70,7 @@ export function TodoDetailPanel({ todo, onClose, onUpdate, onDelete }: TodoDetai
             <Label>描述</Label>
             <Textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
               rows={3}
               placeholder="添加任务描述..."
             />
@@ -80,7 +79,7 @@ export function TodoDetailPanel({ todo, onClose, onUpdate, onDelete }: TodoDetai
           {/* 状态 */}
           <div>
             <Label>状态</Label>
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={(val) => setStatus(val as typeof status)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

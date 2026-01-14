@@ -22,21 +22,6 @@ export function TodoItem({ todo, onToggle, onClick, onDelete, depth = 0 }: TodoI
     return 'secondary'
   }
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return '待处理'
-      case 'in_progress':
-        return '进行中'
-      case 'completed':
-        return '已完成'
-      case 'cancelled':
-        return '已取消'
-      default:
-        return status
-    }
-  }
-
   const hasChildren = todo.children && todo.children.length > 0
 
   return (
@@ -62,10 +47,8 @@ export function TodoItem({ todo, onToggle, onClick, onDelete, depth = 0 }: TodoI
         {/* 复选框 */}
         <Checkbox
           checked={todo.status === 'completed'}
-          onCheckedChange={(e) => {
-            e.stopPropagation()
-            onToggle(todo)
-          }}
+          onCheckedChange={() => onToggle(todo)}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
           className="mt-0.5"
         />
 

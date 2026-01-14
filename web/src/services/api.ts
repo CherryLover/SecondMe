@@ -25,7 +25,6 @@ import type {
   TodoGroup,
   TodoGroupsResponse,
   ApiToken,
-  ApiTokenCreate,
   ApiTokensResponse,
 } from '@/types'
 import { t } from '@/i18n'
