@@ -7,6 +7,7 @@ import type { Provider, ProviderInput, Settings } from '@/types'
 import { ProviderList } from '@/components/settings/ProviderList'
 import { ProviderModal } from '@/components/settings/ProviderModal'
 import { ModelSelector } from '@/components/settings/ModelSelector'
+import { TokenManagement } from '@/components/settings/TokenManagement'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -250,6 +251,15 @@ export default function SettingsPage() {
               {changingPassword ? t('settings.password.buttonLoading') : t('settings.password.button')}
             </Button>
           </div>
+        </section>
+
+        {/* API Token Management */}
+        <section className="bg-white dark:bg-white/5 rounded-xl p-6 border border-muted/10 dark:border-white/5">
+          <div className="flex items-center gap-3 mb-4">
+            <Key className="w-5 h-5 text-accent dark:text-darkAccent" />
+            <h2 className="font-medium text-ink dark:text-darkInk">API Token 管理</h2>
+          </div>
+          <TokenManagement />
         </section>
 
         {/* Admin settings */}
